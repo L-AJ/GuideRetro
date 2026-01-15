@@ -5,3 +5,17 @@ Multi-step retrosynthetic planning aims to decompose target molecules into avail
 All the required packages can be installed by running **pip install -r requirements.txt.**
 ## 📂 Data PreparationData 
 Please download the starting material file **zinc_stock_17_04_20.hdf5** from https://www.dropbox.com/scl/fi/j3kh641irxtpbrnjnmoop/zinc_stock_17_04_20.hdf5?rlkey=zqbymj13skpdqlswu2uvji1sq&st=c1805gz0&dl=0  （it come from FusionRetro）
+Organize the data structure as follows:
+```text
+data/
+├──Test/
+│   ├──chembl_1000.pkl
+│   └──gdb17_1000.pkl
+│   └──test_dataset.json
+├── Train/
+│   ├── for embedding
+│   └── for model
+│       └──train_dataset.json
+│       └──valid_dataset.json
+├── zinc_stock_17_04_20.hdf5
+```
