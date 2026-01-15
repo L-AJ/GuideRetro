@@ -4,6 +4,7 @@ Multi-step retrosynthetic planning aims to decompose target molecules into avail
 ## 🛠️ Requirements
 All the required packages can be installed by running **pip install -r requirements.txt.**
 ## 📂 Data PreparationData 
+### download 
 Please download the starting material file **zinc_stock_17_04_20.hdf5** from https://www.dropbox.com/scl/fi/j3kh641irxtpbrnjnmoop/zinc_stock_17_04_20.hdf5?rlkey=zqbymj13skpdqlswu2uvji1sq&st=c1805gz0&dl=0  （it come from FusionRetro）
 Organize the data structure as follows:
 ```text
@@ -19,3 +20,14 @@ data/
 │       └──valid_dataset.json
 ├── zinc_stock_17_04_20.hdf5
 ```
+### Data preprocessing
+python Dataprocess/to_canolize.py --dataset train  
+python Dataprocess/to_canolize.py --dataset valid  
+python Dataprocess/to_canolize.py --dataset test
+python Dataprocess/get_clear_train_data.py 
+
+## 🚀 Usage (运行)
+### Training
+To train the model on [Dataset Name], run:
+### Evaluation / Testing
+To evaluate the pre-trained model:
