@@ -12,6 +12,7 @@ data/
 ├──Test/
 │   ├──chembl_1000.pkl
 │   └──gdb17_1000.pkl
+│   └──routes_possible_test_hard.pkl
 │   └──test_dataset.json
 ├── Train/
 │   ├── for embedding
@@ -19,6 +20,7 @@ data/
 │       └──train_dataset.json
 │       └──valid_dataset.json
 ├── zinc_stock_17_04_20.hdf5
+├── origin_dict.csv
 ```
 ### Data preprocessing
 python Dataprocess/to_canolize.py --dataset train  
