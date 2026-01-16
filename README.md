@@ -5,7 +5,9 @@ Multi-step retrosynthetic planning aims to decompose target molecules into avail
 All the required packages can be installed by running **pip install -r requirements.txt.**
 ## 📂 Data PreparationData 
 ### download 
-Please download the starting material file **zinc_stock_17_04_20.hdf5** from https://www.dropbox.com/scl/fi/j3kh641irxtpbrnjnmoop/zinc_stock_17_04_20.hdf5?rlkey=zqbymj13skpdqlswu2uvji1sq&st=c1805gz0&dl=0  （it come from FusionRetro）
+Please download the starting material file **[zinc_stock_17_04_20.hdf5](https://www.dropbox.com/scl/fi/j3kh641irxtpbrnjnmoop/zinc_stock_17_04_20.hdf5?rlkey=zqbymj13skpdqlswu2uvji1sq&st=c1805gz0&dl=0)** from Dropbox and put the file (Data/)
+
+Please download the retro_plan **[building block molecules, pretrained models] (https://github.com/binghong-ml/retro_star](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)**and put all the folders(Data/,retro_star/one_step_model/)
 #### Organize the data structure as follows:
 ```text
 data/
