@@ -39,22 +39,22 @@ python Dataprocess/get_clear_train_data.py
 ## 🚀 Usage (运行)
 ### Training
 ```text
+# Global
+
+# Single-step model train
 python model_train.py --batch_size 32 --epochs 300
 ```
 ### Evaluation 
-  #### For Exact Match Results
 ```text
+##For Exact Match Results
 # Greedy dfs
 python greedy_dfs.py --beam_size 5 --temperature 2.2
-
 #Retro* seach
 python retro_search.py --use_value --beam_size 5 ----temperature 2.2
-
 #Retro*-0 seach
 python retro_search.py --beam_size 5 --temperature 2.2
-```
-  #### For Success Rate Results
-```text
+
+##For Success Rate Results
 python retro_star/retro_plan.py --temperature 1.5
 ```
 
