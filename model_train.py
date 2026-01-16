@@ -6,19 +6,17 @@ import argparse
 import random
 import numpy as np
 import math
-from tqdm import tqdm, trange
-from preprocess import get_dataset_all_feature, convert_symbols_to_inputs, get_vocab_size
-from modeling import TransformerConfig, Transformer, get_padding_mask, get_mutual_mask, get_tril_mask, get_mem_tril_mask
-
 import datetime
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from tqdm import tqdm, trange
 import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader, RandomSampler
-from rdkit.rdBase import DisableLog
-from model_eval import evaluate, get_eval_dataloader, convert_dict_to_list
 from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler
+
+from preprocess import get_dataset_all_feature, convert_symbols_to_inputs, get_vocab_size
+from modeling import TransformerConfig, Transformer, get_padding_mask, get_mutual_mask, get_tril_mask, get_mem_tril_mask
+from model_eval import evaluate, get_eval_dataloader, convert_dict_to_list
 
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.warning')
@@ -29,7 +27,7 @@ RDLogger.DisableLog('rdApp.info')
 def load_product_features(checkpoint_path):
     """
     从checkpoint加载产物特征向量，支持.pt和.npy格式
-    并添加0初始化的值向量用于-1索引
+    并添加随机初始化的小值向量用于-1索引
     """
     print(f"Loading product features from {checkpoint_path}")
     
@@ -56,7 +54,6 @@ def load_product_features(checkpoint_path):
     print(f"特征矩阵形状: {features.shape}, 添加了pad向量用于-1索引")
     return features.float()
 
-# ====================计算梯度范数的函数 ====================
 def get_grad_norm(model, norm_type=2):
     """
     计算模型所有参数的梯度范数
@@ -78,7 +75,7 @@ def get_grad_norm(model, norm_type=2):
     )
     return total_norm.item()
 
-# ====================parse args ====================
+# ==================== parser & path setting ====================
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=42, help='Random seed.')
 parser.add_argument('--max_length', type=int, default=200, help='The max length of a molecule.')
@@ -92,8 +89,8 @@ parser.add_argument('--hidden_dropout_prob', type=float, default=0.1, help='Drop
 parser.add_argument('--epochs', type=int, default=300, help='Number of epochs to train.')
 parser.add_argument("--batch_size", default=32, type=int, help="Total batch size for training.")
 parser.add_argument('--finetune_lr', type=float, default=1e-4, help="微调初始学习率")
-parser.add_argument('--pretrained_path', type=str, default="FusionRetro/models/model.pkl", help='Pretrained model path')
-parser.add_argument('--max_grad_norm', type=float, default=0.0, help='grad_clip max norm value, 0 to disable (default: 0.0)')
+parser.add_argument('--pretrained_path', type=str, default="models/model.pkl", help='Pretrained model path')
+parser.add_argument('--max_grad_norm', type=float, default=0.0, help='梯度裁剪阈值，0表示不裁剪')
 parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing epsilon (default: 0.1)')
 
 args = parser.parse_args()
@@ -102,12 +99,12 @@ print(f"Label Smoothing: {args.label_smoothing}")
 print(f"max_grad_norm: {args.max_grad_norm}")
 
 entity_file = 'Data/Train/for_embedding/all_molecules_clean.txt'
-features_path = 'rgcn/global_emb_FP_512/model_epoch197_0.00307_embedding.npy'
+features_path = 'rgcn/global_emb_FP_512/embedding.npy'
 
 train_data_file = 'Data/Train/for_model/clean_train_FINAL.json'
 test_data_file = 'Data/Test/test_canolize_dataset.json'
 
-ckpt_dir = "FusionRetro/models_final_FP512_mean_pooling"
+ckpt_dir = "models"
 os.makedirs(ckpt_dir, exist_ok=True)
 cache_file = ckpt_dir + "/fp_cache.npz"
 
@@ -129,23 +126,21 @@ config = TransformerConfig(vocab_size=get_vocab_size(),
                            intermediate_size=args.intermediate_size,
                            hidden_dropout_prob=args.hidden_dropout_prob)
 
-
-mean_pooling_features_path = 'FusionRetro/models_final_FP512_mean_pooling/fp_cache_custom_features.npy'
 try:
-    product_features = load_product_features(mean_pooling_features_path)
+    product_features = load_product_features(features_path)
     print("Product features loaded with shape:", product_features.shape)
 except Exception as e:
     print(f"Error loading product features: {e}")
     raise
 
-# ==================== Get eval data ==============================
-
+# === Get val data dataloader ===
 test_products_dict, test_reactants_dict, test_product_ids_dict = get_dataset_all_feature(
     test_data_file,
     entity_file, 
     features_path, 
     cache_file
 )
+
 test_products_list, test_reactants_list, test_product_ids_list = convert_dict_to_list(
     test_products_dict, test_reactants_dict, test_product_ids_dict
 )
@@ -154,9 +149,7 @@ test_loader = get_eval_dataloader(
     args.batch_size, args.max_length
 )
 
-
-
-# === Get train data ==============================
+#  === Get train data dataloader ===
 depth_products_list, depth_reactants_list, depth_product_ids_list = get_dataset_all_feature(
     train_data_file,
     entity_file, 
@@ -205,14 +198,26 @@ def get_depth_dataloader(depth):
     )
     return train_dataloader
 
-
 train_dataloader_list = []
 for depth in list(depth_products_list.keys()):
     train_dataloader_list.append(get_depth_dataloader(depth))
 
+test_products_dict, test_reactants_dict, test_product_ids_dict = get_dataset_all_feature(
+    test_data_file,
+    entity_file, 
+    features_path, 
+    cache_file
+)
 
+test_products_list, test_reactants_list, test_product_ids_list = convert_dict_to_list(
+    test_products_dict, test_reactants_dict, test_product_ids_dict
+)
+test_loader = get_eval_dataloader(
+    test_products_list, test_reactants_list, test_product_ids_list, 
+    args.batch_size, args.max_length
+)
 
-# ==================== model ====================
+# ==================== Model ====================
 model = Transformer(config)
 checkpoint = torch.load(args.pretrained_path)
 if isinstance(checkpoint, torch.nn.DataParallel):
@@ -224,7 +229,7 @@ if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
 elif hasattr(checkpoint, 'state_dict'):
     pretrained_dict = checkpoint.state_dict()
 else:
-    raise ValueError("预训练模型文件格式不支持，既不是dict也不是模型对象")
+    raise ValueError("Unsupported checkpoint format")
 
 matched_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and model_dict[k].shape == v.shape}
 model_dict.update(matched_dict)
@@ -232,14 +237,14 @@ model.load_state_dict(model_dict, strict=False)
 
 total_params = len(model_dict)
 loaded_params = len(matched_dict)
-print(f"成功加载 {loaded_params}/{total_params} 个参数")
-print(f"新增参数将使用随机初始化")
+print(f"loaded {loaded_params}/{total_params} parameters from pretrained model.")
+print(f"randomly initialized new parameters.")
 
 if num_gpu > 1:
     model = torch.nn.DataParallel(model)
 model.to(device)
 
-# ==== optimizer and scheduler ==============================
+# ==================== Optimizer and Scheduler ====================
 optimizer = optim.Adam(model.parameters(), lr=args.finetune_lr)
 
 def get_cosine_with_warmup_scheduler(optimizer, num_warmup_steps, num_training_steps, min_lr=1e-6):
@@ -269,6 +274,7 @@ criterion = nn.CrossEntropyLoss(
 )
 print(f"Loss Function Initialized: nn.CrossEntropyLoss(label_smoothing={args.label_smoothing})")
 
+# ==================== Training Setup ====================
 continue_epoch = 0
 global_step = 0
 
@@ -283,7 +289,7 @@ log_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_file = ckpt_dir + f"/training_log_{log_time}.txt"
 
 
-# ==================== log metrics ====================
+# ==================== log ====================
 def log_metrics(epoch: int, metrics: dict, first: bool = False):
     mode = 'w' if first else 'a'
     with open(log_file, mode, encoding='utf-8') as f:
@@ -303,13 +309,11 @@ def log_metrics(epoch: int, metrics: dict, first: bool = False):
                 f.write(f" | {k}:{v:.6f}")
         f.write("\n")
 
-
-# 训练循环
 print(f"Starting training on device: {device}")
 print(f"Number of GPUs: {num_gpu}")
 
+# ==================== Training Loop ====================
 epochs_no_improve = 0
-
 try:
     for epoch in trange(continue_epoch + 1, continue_epoch + int(args.epochs) + 1, desc="Epoch"):
         model.train()
@@ -317,8 +321,6 @@ try:
         total_sum_loss = 0
         depth_loss = {}
         depth = 2
-        
-        # ==================== 新增：梯度范数统计变量 ====================
         grad_norms = []
         
         for train_dataloader in train_dataloader_list:
@@ -349,11 +351,8 @@ try:
                 loss = criterion(logits_flat, labels_flat)
                 loss.backward()
 
-                # ==================== 新增：记录梯度范数（裁剪前）====================
                 grad_norm = get_grad_norm(model)
                 grad_norms.append(grad_norm)
-
-                # 可选的梯度裁剪
                 if args.max_grad_norm > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.max_grad_norm)
                 
@@ -373,7 +372,6 @@ try:
 
         avg_loss = total_sum_loss / total_t
         
-        # ==================== 新增：计算梯度范数统计 ====================
         grad_norms_np = np.array(grad_norms)
         grad_stats = {
             'mean': float(np.mean(grad_norms_np)),
@@ -381,7 +379,7 @@ try:
             'p95': float(np.percentile(grad_norms_np, 95))
         }
         
-        # eval
+        # evalulate
         if epoch % 10 == 0 or epoch >= args.epochs - 100 or epoch == 1:
             model.eval()
             with torch.no_grad():
@@ -404,15 +402,13 @@ try:
             }
             log_metrics(epoch, metrics, first=(epoch == 1))
             
-            
+
             path_improved = path_acc > best_path_acc
             step_improved = step_acc > best_step_acc
-
             if path_improved and step_improved:
                 best_path_acc = path_acc
                 best_step_acc = step_acc
                 best_both_epoch = epoch
-                
                 save_path = f"{ckpt_dir}/finetune_best_model_ffn_gate_both.pth"
                 torch.save({
                     'epoch': epoch,
@@ -454,7 +450,6 @@ try:
                     print(f"New step best → {step_acc:.4f} saved!")
 
         else:
-            
             metrics = {
                 'train_loss': avg_loss, 
                 'lr': optimizer.param_groups[0]['lr'],
@@ -498,11 +493,9 @@ finally:
         "=" * 80
     ]
     
-    # 打印到控制台
     for line in summary_lines:
         print(line)
-    
-    # 写入日志文件
+    # ==================== write summary to log file ====================
     try:
         with open(log_file, 'a', encoding='utf-8') as f:
             for line in summary_lines:
