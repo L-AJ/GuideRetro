@@ -5,9 +5,9 @@ Multi-step retrosynthetic planning aims to decompose target molecules into avail
 All the required packages can be installed by running **pip install -r requirements.txt.**
 ## 📂 Data PreparationData 
 ### download 
-Please download the [RetroBench data and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)**  and put the file (`Data/`).
-Please download the retro_plan **[building block molecules, pretrained models](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)** and put all the folders (`Data/`, `retro_star/one_step_model/`) into the root directory.
-Please download the **[USPTO-Full data](https://github.com/Hanjun-Dai/GLN)** and put the file(`Data/Train/for embedding`)
+Please download the [RetroBench and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)**  and put the file (`Data/`).  
+Please download the retro_plan **[building block molecules, pretrained models](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)** and put all the folders (`Data/`, `retro_star/one_step_model/`) into the root directory.  
+Please download the **[USPTO-Full](https://github.com/Hanjun-Dai/GLN)** and put the file(`Data/Train/for embedding`)  
 #### Organize the data structure as follows:
 ```text
 Data/
