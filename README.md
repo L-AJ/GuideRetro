@@ -30,7 +30,7 @@ Data/
 ├── zinc_stock_17_04_20.hdf5
 ├── origin_dict.csv
 ```
-### Data preprocessing
+### 3. Data preprocessing
 ```text
 # Canolize RetroBench (eg. train_dataset.json --> train_canolize_dataset.json)
 python Dataprocess/to_canolize.py --dataset train  
@@ -42,14 +42,14 @@ python Dataprocess/get_clear_train_data.py
 
 ```
 ## 🚀 Usage (运行)
-### Training
+### 1. Training
 ```text
 # Global
 
 # Single-step model train
 python model_train.py --batch_size 32 --epochs 300
 ```
-### Evaluation 
+### 2. Evaluation 
 ```text
 ##For Exact Match Results
 # Greedy dfs
