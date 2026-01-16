@@ -6,7 +6,7 @@ All the required packages can be installed by running **pip install -r requireme
 ## 📂 Data PreparationData 
 ### download 
 Please download the starting material file **zinc_stock_17_04_20.hdf5** from https://www.dropbox.com/scl/fi/j3kh641irxtpbrnjnmoop/zinc_stock_17_04_20.hdf5?rlkey=zqbymj13skpdqlswu2uvji1sq&st=c1805gz0&dl=0  （it come from FusionRetro）
-Organize the data structure as follows:
+#### Organize the data structure as follows:
 ```text
 data/
 ├──Test/
@@ -17,19 +17,39 @@ data/
 ├── Train/
 │   ├── for embedding
 │   └── for model
-│       └──train_dataset.json
-│       └──valid_dataset.json
+│       └──train_canolize_dataset.json
+│       └──valid_canolize_dataset.json
 ├── zinc_stock_17_04_20.hdf5
 ├── origin_dict.csv
 ```
 ### Data preprocessing
+```text
+# Canolize RetroBench (eg. train_dataset.json --> train_canolize_dataset.json)
 python Dataprocess/to_canolize.py --dataset train  
-python Dataprocess/to_canolize.py --dataset valid  
-python Dataprocess/to_canolize.py --dataset test
+python Dataprocess/to_canolize.py --dataset valid
+ 
+# Remove the data containing the test molecules
 python Dataprocess/get_clear_train_data.py 
-
+```
 ## 🚀 Usage (运行)
 ### Training
-To train the model on [Dataset Name], run:
-### Evaluation / Testing
-To evaluate the pre-trained model:
+```text
+python model_train.py --batch_size 32 --epochs 300
+```
+### Evaluation 
+  #### For Exact Match Results
+```text
+# Greedy dfs
+python Greedy_dfs.py --beam_size 5 --temperature 2.2
+
+#Retro* seach
+python Retro_search.py --use_value --beam_size 5 ----temperature 2.2
+
+#Retro*-0 seach
+python Retro_search.py --beam_size 5 ----temperature 2.2
+```
+  #### For Success Rate Results
+```text
+python Retro_star/retro_plan.py --test_routes 
+```
+
