@@ -5,12 +5,12 @@ Multi-step retrosynthetic planning aims to decompose target molecules into avail
 All the required packages can be installed by running **pip install -r requirements.txt.**
 ## 📂 Data PreparationData 
 ### download 
-Please download the starting material file **[zinc_stock_17_04_20.hdf5](https://www.dropbox.com/scl/fi/j3kh641irxtpbrnjnmoop/zinc_stock_17_04_20.hdf5?rlkey=zqbymj13skpdqlswu2uvji1sq&st=c1805gz0&dl=0)** from Dropbox and put the file (Data/)
-
-Please download the retro_plan **[building block molecules, pretrained models] (https://github.com/binghong-ml/retro_star](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)**and put all the folders(Data/,retro_star/one_step_model/)
+Please download the [RetroBench data and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)**  and put the file (`Data/`).
+Please download the retro_plan **[building block molecules, pretrained models](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)** and put all the folders (`Data/`, `retro_star/one_step_model/`) into the root directory.
+Please download the **[USPTO-Full data](https://github.com/Hanjun-Dai/GLN)** and put the file(`Data/Train/for embedding`)
 #### Organize the data structure as follows:
 ```text
-data/
+Data/
 ├──Test/
 │   ├──chembl_1000.pkl
 │   └──gdb17_1000.pkl
@@ -18,6 +18,9 @@ data/
 │   └──test_dataset.json
 ├── Train/
 │   ├── for embedding
+│       └──raw_test.csv
+│       └──raw_train.csv
+│       └──raw_val.csv
 │   └── for model
 │       └──train_canolize_dataset.json
 │       └──valid_canolize_dataset.json
@@ -42,16 +45,16 @@ python model_train.py --batch_size 32 --epochs 300
   #### For Exact Match Results
 ```text
 # Greedy dfs
-python Greedy_dfs.py --beam_size 5 --temperature 2.2
+python greedy_dfs.py --beam_size 5 --temperature 2.2
 
 #Retro* seach
-python Retro_search.py --use_value --beam_size 5 ----temperature 2.2
+python retro_search.py --use_value --beam_size 5 ----temperature 2.2
 
 #Retro*-0 seach
-python Retro_search.py --beam_size 5 ----temperature 2.2
+python retro_search.py --beam_size 5 --temperature 2.2
 ```
   #### For Success Rate Results
 ```text
-python Retro_star/retro_plan.py --test_routes 
+python retro_star/retro_plan.py --temperature 1.5
 ```
 
