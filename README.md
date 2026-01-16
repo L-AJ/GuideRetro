@@ -2,13 +2,16 @@
 ## 📝 Abstract 
 Multi-step retrosynthetic planning aims to decompose target molecules into available starting materials by combining single-step predictions with search algorithms. The success of multi-step retrosynthesis depends on the joint guidance of single-step reasoning and global search across steps. While recent single-step models have achieved strong performance, most existing approaches still rely primarily on local chemical context and lack explicit global synthesizability signals to steer planning toward reachable starting materials. In this work, we propose GuideRetro, a synthesizability-aware framework for multi-step retrosynthetic planning that integrates global synthesizability knowledge into step-wise retrosynthetic prediction. GuideRetro learns transferable global synthesizability knowledge from large-scale reaction networks by modeling how synthetic difficulty evolves along reaction sequences, providing directional signals of synthetic accessibility. During planning, a route-aware state modeling module combines the evolving retrosynthetic route with retrieved global synthesizability signals to guide reactant generation at each step. Experiments on standard benchmarks show that GuideRetro consistently improves multi-step planning, achieving higher success rates and more efficient search under realistic planning settings.
 ## 🛠️ Requirements
-All the required packages can be installed by running **pip install -r requirements.txt.**
+All the required packages can be installed by running `pip install -r requirements.txt`.
 ## 📂 Data PreparationData 
-### download 
-Please download the [RetroBench and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)**  and put the file (`Data/`).  
-Please download the retro_plan **[building block molecules, pretrained models](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)** and put all the folders (`Data/`, `retro_star/one_step_model/`) into the root directory.  
-Please download the **[USPTO-Full](https://github.com/Hanjun-Dai/GLN)** and put the file(`Data/Train/for embedding`)  
-#### Organize the data structure as follows:
+### 1. Download Steps
+
+1.  **RetroBench & Zinc Stock**: Download **[RetroBench and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)** and place the files into `Data/`.
+2.  **Building Blocks & Models**: Download **[retro_plan data](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)**. Unzip it and move the `Data/` and `retro_star/one_step_model/` folders to the project root directory (merge with existing folders).
+3.  **USPTO-Full**: Download **[USPTO-Full](https://github.com/Hanjun-Dai/GLN)** and place the files into `Data/Train/for embedding/`.
+
+### 2. Directory Structur
+Organize the data structure as follows:
 ```text
 Data/
 ├──Test/
@@ -33,8 +36,10 @@ Data/
 python Dataprocess/to_canolize.py --dataset train  
 python Dataprocess/to_canolize.py --dataset valid
  
-# Remove the data containing the test molecules
-python Dataprocess/get_clear_train_data.py 
+# Get training data and ensure that it does not contain test molecules
+python Dataprocess/get_clear_emb_node.py
+python Dataprocess/get_clear_train_data.py
+
 ```
 ## 🚀 Usage (运行)
 ### Training
