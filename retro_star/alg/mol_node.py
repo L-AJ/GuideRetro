@@ -4,7 +4,7 @@ import logging
 
 class MolNode:
     def __init__(self, mol, init_value, parent=None, is_known=False,
-                 zero_known_value=True, searcher=None):
+                 zero_known_value=True, searcher=None,sim_feat_seach_topk=3):
         self.mol = mol
         self.pred_value = init_value
         self.value = init_value
@@ -16,16 +16,16 @@ class MolNode:
         if self.parent is None:
             self.depth = 0
             self.product_list = [mol]
-            results, _ = searcher.query(mol, top_k=1)
-            feat = results[0]['feature']
+            results= searcher.query_mean_pooling_result(mol, top_k=sim_feat_seach_topk)
+            feat = results['feature']
             if isinstance(feat, np.ndarray):
                 feat = np.expand_dims(feat, axis=0)  # [1, feature_dim]
             self.product_exter_feature = feat  # shape: [1, feature_dim]
         else:
             self.depth = self.parent.depth
             self.product_list = self.parent.parent.product_list + [mol]
-            results, _ = searcher.query(mol, top_k=1)
-            feat = results[0]['feature']
+            results= searcher.query_mean_pooling_result(mol, top_k=sim_feat_seach_topk)
+            feat = results['feature']
             if isinstance(feat, np.ndarray):
                 feat = np.expand_dims(feat, axis=0)  # [1, feature_dim]
             # vstack后 shape: [step, feature_dim]

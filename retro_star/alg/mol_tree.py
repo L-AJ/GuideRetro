@@ -9,7 +9,7 @@ from retro_star.alg.syn_route import SynRoute
 
 
 class MolTree:
-    def __init__(self, target_mol, known_mols, value_fn, zero_known_value=True, searcher=None):
+    def __init__(self, target_mol, known_mols, value_fn, zero_known_value=True, searcher=None,sim_feat_seach_topk=3):
         self.target_mol = target_mol
         self.known_mols = known_mols
         self.value_fn = value_fn
@@ -18,6 +18,7 @@ class MolTree:
         self.reaction_nodes = []
 
         self.searcher=searcher
+        self.sim_feat_seach_topk = sim_feat_seach_topk
 
         self.root = self._add_mol_node(target_mol, None)
         self.succ = target_mol in known_mols
@@ -29,6 +30,8 @@ class MolTree:
     def _add_mol_node(self, mol, parent, searcher=None):
         if searcher is None:
             searcher = self.searcher
+            
+        sim_feat_seach_topk = self.sim_feat_seach_topk
 
         is_known = mol in self.known_mols
 
@@ -40,7 +43,8 @@ class MolTree:
             parent=parent,
             is_known=is_known,
             zero_known_value=self.zero_known_value,
-            searcher=searcher
+            searcher=searcher,
+            sim_feat_seach_topk=sim_feat_seach_topk
         )
         self.mol_nodes.append(mol_node)
         mol_node.id = len(self.mol_nodes)
