@@ -65,6 +65,9 @@ python retro_search.py --use_value --beam_size 5 ----temperature 2.2
 python retro_search.py --beam_size 5 --temperature 2.2
 
 ** For Success Rate Results **
+# Retro* seach
+python retro_star/retro_plan.py --use_value --temperature 1.5
+# Retro*-0 seach
 python retro_star/retro_plan.py --temperature 1.5
 ```
 
