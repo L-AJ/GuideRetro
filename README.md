@@ -12,7 +12,7 @@ All the required packages can be installed by running `pip install -r requiremen
 ### 1. Download Steps
 
 1.  **RetroBench & Zinc Stock**: Download **[RetroBench and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)** and place the files into `Data/`.
-2.  **Building Blocks & Models**: Download **[retro_plan data](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)**. Unzip it and move the `Data/` and `retro_star/one_step_model/` folders to the project root directory (merge with existing folders).
+2.  **Retro Building Blocks & Models**: Download **[Retro_plan data](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)**. Unzip it and move the `Data/` and `retro_star/one_step_model/` folders to the project root directory (merge with existing folders).
 3.  **USPTO-Full**: Download **[USPTO-Full](https://github.com/Hanjun-Dai/GLN)** and place the files into `Data/Train/for embedding/`.
 
 ### 2. Directory Structur
@@ -66,8 +66,8 @@ python retro_search.py --beam_size 5 --temperature 2.2
 
 ** For Success Rate Results **
 # Retro* seach
-python retro_star/retro_plan.py --use_value --temperature 1.5
+python retro_star/retro_plan.py --test_routes 'test dataset path' --use_value --temperature 1.5
 # Retro*-0 seach
-python retro_star/retro_plan.py --temperature 1.5
+python retro_star/retro_plan.py --test_routes 'test dataset path' --temperature 1.5 
 ```
 
