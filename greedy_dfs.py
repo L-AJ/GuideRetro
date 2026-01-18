@@ -23,7 +23,6 @@ RDLogger.DisableLog('rdApp.warning')
 RDLogger.DisableLog('rdApp.error')
 RDLogger.DisableLog('rdApp.info')
 
-# 全局变量
 char_to_ix = None
 ix_to_char = None
 vocab_size = None
