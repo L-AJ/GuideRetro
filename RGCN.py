@@ -19,7 +19,6 @@ def construct_dgl_graph(args):
     dst_raw = []
     etypes = []
     sc_list = []
-    # 先收集所有实体
     if args.score_file is None:
         raise ValueError("Please provide the score_file argument.")
     with open(args.score_file) as fin:
@@ -34,14 +33,14 @@ def construct_dgl_graph(args):
             dst_raw.append(t)
             etypes.append(int(r))
             sc_list.append(float(sc))
-    # 用原始id作为节点id
-    num_nodes = max(entities) + 1  # 假设id是从0开始的整数，否则用max+1
+    
+    num_nodes = max(entities) + 1  
     graph = dgl.DGLGraph()
     graph.add_nodes(num_nodes)
 
     
-    graph.add_edges(torch.tensor(src_raw), torch.tensor(dst_raw))  ##inverse
-    # graph.add_edges(torch.tensor(dst_raw), torch.tensor(src_raw))
+    graph.add_edges(torch.tensor(src_raw), torch.tensor(dst_raw))  
+    
     
     graph.edata[dgl.ETYPE] = torch.tensor(etypes)
     in_deg = graph.in_degrees().float()
@@ -50,20 +49,19 @@ def construct_dgl_graph(args):
 
     # sc=product - reactant
     graph.edata['sc'] = -torch.tensor(sc_list, dtype=torch.float32)
-    # print(f"Total entities: {graph.number_of_nodes()}")
-    # print("Graph edata keys:", list(graph.edata.keys()))
+    
     return graph
 
 class RGCN(nn.Module):
     def __init__(self, num_nodes, h_dim, num_rels, pretrained_emb=None):
         super().__init__()
-        # two-layer RGCN
+        
         
         if pretrained_emb is not None:
-            self.emb = nn.Embedding.from_pretrained(pretrained_emb, freeze=False)  # 可继续训练
+            self.emb = nn.Embedding.from_pretrained(pretrained_emb, freeze=False)  
             print("Pretrained embeddings loaded for RGCN.")
         else:
-            self.emb = nn.Embedding(num_nodes, h_dim)  # 随机初始化
+            self.emb = nn.Embedding(num_nodes, h_dim)  
         # self.emb = nn.Embedding(num_nodes, h_dim)
         self.conv1 = RelGraphConv(
             h_dim,
@@ -137,31 +135,31 @@ class LinkPredict(nn.Module):
         return predict_loss + self.reg_param * reg_loss
 
 def load_pretrained_embeddings(npy_path, device='cpu'):
-    # 使用 numpy 加载 .npy 文件
+    
     pretrained_emb = np.load(npy_path)
-    # 转换为 PyTorch 张量
+    
     pretrained_emb = torch.tensor(pretrained_emb, dtype=torch.float32, device=device)
     return pretrained_emb
 
 
 def save_checkpoint(model, epoch, avg_loss, ckpt_dir, saved_checkpoints, save_embedding=False):
-    """优化的模型保存函数"""
+    
     ckpt_path = os.path.join(ckpt_dir, f"model_epoch{epoch}_{avg_loss:.5f}.pt")
     
-    # 删除旧checkpoint
+    
     if len(saved_checkpoints) == saved_checkpoints.maxlen:
         oldest = saved_checkpoints.popleft()
         if os.path.exists(oldest):
             os.remove(oldest)
     
-    # 构建保存内容
+    
     save_dict = {
         'epoch': epoch,
         'loss': avg_loss,
-        'model_state_dict': model.state_dict(),  # 已包含 embedding
+        'model_state_dict': model.state_dict(),  
     }
     
-    # 仅在需要时单独保存 embedding（用于其他用途）
+    
     if save_embedding:
         save_dict['embedding'] = model.rgcn.emb.weight.detach().cpu().numpy()
     
@@ -197,14 +195,14 @@ def train(dataloader, device, model, args):
             optimizer.zero_grad()
             
             with autocast():
-                # ------------------- 前向计算 -------------------
+                
                 feats = model.rgcn.emb(input_nodes)            
                 embed = model.rgcn.forward_full(blocks, feats) 
                 
                 num_output = embed.shape[0]
                 full_feat = torch.cat([embed, feats[num_output:]], dim=0)
 
-                # ------------------- 获取最后一层 Block 数据 -------------------
+                
                 block = blocks[-1]
                 src, dst = block.edges()                                 
                 rel = block.edata[dgl.ETYPE]
@@ -213,7 +211,7 @@ def train(dataloader, device, model, args):
                 if sc.shape[0] == 0:
                     continue
 
-                # ==================== MAX SC 正样本选择 ====================
+                
                 sort_idx = torch.argsort(sc, descending=True)
                 sorted_dst = dst[sort_idx]
                 
@@ -231,7 +229,7 @@ def train(dataloader, device, model, args):
                 if num_pos == 0:
                     continue
 
-                # ------------------- 负样本采样 -------------------
+                # ------------------- neg sample -------------------
                 all_indices = torch.arange(sc.shape[0], device=device)
                 is_pos = torch.zeros(sc.shape[0], dtype=torch.bool, device=device)
                 is_pos[max_global_idx] = True
@@ -249,7 +247,7 @@ def train(dataloader, device, model, args):
                     perm = torch.randint(0, neg_indices.shape[0], (target_neg,), device=device)
                 sampled_neg_indices = neg_indices[perm]
 
-                # ------------------- 打分计算 -------------------
+                # ------------------- score -------------------
                 pos_triples = torch.stack([pos_src, pos_rel, pos_dst], dim=1)
                 pos_scores = model.calc_score(full_feat, pos_triples)
 
@@ -265,7 +263,7 @@ def train(dataloader, device, model, args):
                 diff = pos_scores.unsqueeze(1) - sampled_neg
                 bpr_loss = -torch.log(torch.sigmoid(diff) + 1e-8).mean()
 
-            # ------------------- 反向传播 -------------------
+           
             scaler.scale(bpr_loss).backward()
             scaler.unscale_(optimizer)
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -275,7 +273,7 @@ def train(dataloader, device, model, args):
             epoch_loss += bpr_loss.item()
             step_count += 1
 
-        # ------------------- Epoch 结束 -------------------
+        
         avg_loss = epoch_loss / step_count if step_count > 0 else float('inf')
         epoch_bar.set_postfix({'loss': f'{avg_loss:.5f}', 'best': f'{best_loss:.5f}'})
 
@@ -289,10 +287,10 @@ def train(dataloader, device, model, args):
             # 1. Checkpoint
             # save_checkpoint(model, epoch + 1, avg_loss, ckpt_dir, saved_checkpoints, save_embedding=False)
             
-            # 2. embedding 为最佳 embedding 
+            # 2. embedding  
             np.save(best_emb_path, model.rgcn.emb.weight.detach().cpu().numpy())
 
-    # ========== 训练结束 ==========
+    
     print(f"\nTraining completed! Best loss: {best_loss:.6f}")
     print(f"Best Embeddings saved to: {best_emb_path}")
 if __name__ == "__main__":
@@ -348,7 +346,7 @@ if __name__ == "__main__":
     
     print("Graph nodes:", g.number_of_nodes())
     print("Embedding shape:", pretrain_emb.shape)
-    assert g.number_of_nodes() == pretrain_emb.shape[0], "节点数和嵌入数不一致！"
+    assert g.number_of_nodes() == pretrain_emb.shape[0], "Node count and embedding size mismatch!"
 
     model = LinkPredict(num_nodes, num_rels, h_dim=args.hid_size, pretrained_emb=pretrain_emb).to(device)
 
