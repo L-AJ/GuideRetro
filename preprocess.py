@@ -175,7 +175,7 @@ def convert_symbols_to_inputs(products_list, reactants_list, product_ids_list, m
     # memory
     memory_input_mask = np.zeros((len(products_list), max_depth))
     
-    # 新增产物ID矩阵
+    
     products_id_matrix = np.zeros((len(products_list), max_depth), dtype=np.int64)
     
     for index, (products, product_ids) in enumerate(zip(products_list, product_ids_list)):
@@ -183,10 +183,9 @@ def convert_symbols_to_inputs(products_list, reactants_list, product_ids_list, m
         memory_input_mask[index, :len(products)] = 1
         
         for i, (product, product_id) in enumerate(zip(products, product_ids)):
-            # 处理产物ID
+            
             products_id_matrix[index, i] = int(product_id)
             
-            # 原有的产物和反应物处理
             reactant = reactants[i]
             product = '^' + product + '$'
             reactant = '^' + reactant + '$'
