@@ -311,10 +311,9 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
 # ==================== (Greedy DFS) ====================
 
 def get_route_result(task, searcher=None):
-    # === inference_mode ===
     with torch.inference_mode():
         max_depth = task["depth"]
-        results = searcher.get_random_result(seed=42)
+        results= searcher.query_mean_pooling_result(task["product"], top_k=5)
         product_exter_feature = results['feature']
         
         if isinstance(product_exter_feature, np.ndarray):
@@ -385,7 +384,7 @@ def get_route_result(task, searcher=None):
                     if check_reactant_is_material(reactant):
                         iter_starting_materials.append(reactant)
                     else:
-                        results = searcher.get_random_result(seed=42)
+                        results = searcher.query_mean_pooling_result(reactant, top_k=5)
                         add_feature = results['feature']
                         if isinstance(add_feature, np.ndarray):
                             add_feature = add_feature.reshape(1, -1)
@@ -648,7 +647,7 @@ if __name__ == "__main__":
     os.makedirs(ckpt_dir, exist_ok=True)
     cache_file = ckpt_dir + "/fp_cache.npz"
 
-    checkpoint_path = "models/finetune_best_model_random_un.pth"
+    checkpoint_path = "models/finetune_best_model.pth"
 
     # Load Model
     print("Loading model...")

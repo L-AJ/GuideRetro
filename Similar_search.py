@@ -10,17 +10,15 @@ import multiprocessing
 from typing import List, Dict, Tuple, Optional, Union
 
 # -----------------------------------------------------------------------------
-# for multiprocessing
+# for muti Worker 
 # -----------------------------------------------------------------------------
 def _process_chunk(chunk_data):
-    """
-    处理一个数据块：解析SMILES -> 生成指纹 -> 计算Popcount
-    """
+    
     indices, smiles_list = chunk_data
     generator = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
     
     fps = []
-    popcounts = [] # 存储指纹中'1'的个数，用于精确计算Tanimoto
+    popcounts = [] 
     valid_indices = []
     valid_smiles = []
     
@@ -30,15 +28,12 @@ def _process_chunk(chunk_data):
             if mol is None:
                 continue
                 
-            # 生成指纹
             fp_obj = generator.GetFingerprint(mol)
             
-            # 1. 转换为二进制 bytes (非常快且省内存)
+        
             binary_text = DataStructs.BitVectToBinaryText(fp_obj)
             fp_arr = np.frombuffer(binary_text, dtype=np.uint8)
             
-            # 2. 计算 Popcount (位为1的个数)
-            # 这一步对 Tanimoto 精确计算至关重要
             pop = fp_obj.GetNumOnBits()
             
             fps.append(fp_arr)
@@ -52,9 +47,8 @@ def _process_chunk(chunk_data):
     return fps, popcounts, valid_indices, valid_smiles
 
 # -----------------------------------------------------------------------------
-# main class
+# main
 # -----------------------------------------------------------------------------
-
 class SimilaritySearcher:
     def __init__(
         self, 
@@ -73,16 +67,16 @@ class SimilaritySearcher:
         # 核心数据
         self.index = None
         self.fingerprints = None    # uint8 array (N, 256)
-        self.popcounts = None       # int16 array (N,) - 预计算的位数
+        self.popcounts = None       # int16 array (N,) 
         self.features = None        # float32 array (N, D)
         self.smiles_list = None     # List[str]
-        self.original_indices = None # 映射回原始文件的行号
+        self.original_indices = None 
         
         self._load_data()
         self._build_index()
 
     def _load_data(self):
-        """加载数据（优先缓存，其次多进程处理）"""
+        
         if self.cache_file and os.path.exists(self.cache_file):
             print(f"Loading from cache: {self.cache_file}")
             data = np.load(self.cache_file, allow_pickle=True)
@@ -96,19 +90,19 @@ class SimilaritySearcher:
 
         print("Cache not found. Processing raw files...")
         
-        # 1. 读取所有文本行
+       
         raw_entries = []
         with open(self.entity_file, 'r') as f:
             for i, line in enumerate(f):
                 parts = line.strip().split('\t')
                 if len(parts) >= 2:
-                    # 假设格式: ID \t SMILES
+                    #  ID \t SMILES
                     raw_entries.append((int(parts[0]), parts[1]))
         
         total_items = len(raw_entries)
         print(f"Total raw entries: {total_items}")
         
-        # 2. 准备分块数据进行多进程处理
+        
         chunk_size = max(100, total_items // (self.num_workers * 4))
         chunks = []
         for i in range(0, total_items, chunk_size):
@@ -117,7 +111,7 @@ class SimilaritySearcher:
             smiles = [x[1] for x in batch]
             chunks.append((indices, smiles))
             
-        # 3. 多进程处理
+        
         fps_list = []
         pop_list = []
         indices_list = []
@@ -125,7 +119,6 @@ class SimilaritySearcher:
         
         print(f"Processing fingerprints with {self.num_workers} processes...")
         with multiprocessing.Pool(self.num_workers) as pool:
-            # 使用 imap 进行有序返回及显示进度条
             for res_fps, res_pops, res_idxs, res_smis in tqdm(
                 pool.imap(_process_chunk, chunks), total=len(chunks)
             ):
@@ -134,13 +127,13 @@ class SimilaritySearcher:
                 indices_list.extend(res_idxs)
                 smiles_list.extend(res_smis)
         
-        # 4. 转换格式
+       
         self.fingerprints = np.array(fps_list, dtype=np.uint8)
-        self.popcounts = np.array(pop_list, dtype=np.int16) # Popcount不会超过2048，int16够用
+        self.popcounts = np.array(pop_list, dtype=np.int16) 
         self.original_indices = np.array(indices_list, dtype=np.int64)
         self.smiles_list = smiles_list
         
-        # 5. 加载特征 (只加载有效指纹对应的特征)
+        
         print("Loading features...")
         if self.feature_file.endswith('.npy'):
             full_features = np.load(self.feature_file, mmap_mode='r')
@@ -148,10 +141,9 @@ class SimilaritySearcher:
             data = torch.load(self.feature_file, map_location='cpu')
             full_features = data['embedding'] if 'embedding' in data else data.numpy()
         
-        # 根据原始索引提取特征
         self.features = np.array(full_features[self.original_indices], dtype=np.float32)
         
-        # 6. 保存缓存
+        # cache
         if self.cache_file:
             print("Saving cache...")
             np.savez_compressed(
@@ -168,19 +160,18 @@ class SimilaritySearcher:
         d = self.fingerprints.shape[1] * 8 # bits, usually 2048
         print(f"Building FAISS Binary Index for {d} bits...")
         
-        # 对于百万级数据，BinaryFlat (暴力搜索) 在现代CPU/GPU上非常快
-        # 如果数据量超过 500万，建议切换到 IndexBinaryIVF
+        
         n_samples = len(self.fingerprints)
         
         if n_samples > 5000000:
-            # 大规模数据使用倒排索引
+            
             quantizer = faiss.IndexBinaryFlat(d)
             self.index = faiss.IndexBinaryIVF(quantizer, d, min(4096, int(np.sqrt(n_samples))))
-            self.index.nprobe = 10 # 搜索时的探测簇数
+            self.index.nprobe = 10 
             print("Training IVF index...")
             self.index.train(self.fingerprints)
         else:
-            # 百万级以下直接用Flat，最精确且不需要训练
+            
             self.index = faiss.IndexBinaryFlat(d)
         
         self.index.add(self.fingerprints)
@@ -201,7 +192,7 @@ class SimilaritySearcher:
             raise ValueError(f"Invalid SMILES: {smiles}")
         fp_obj = generator.GetFingerprint(mol)
         
-        # 转numpy uint8
+        # numpy uint8
         binary_text = DataStructs.BitVectToBinaryText(fp_obj)
         arr = np.frombuffer(binary_text, dtype=np.uint8)
         
@@ -211,8 +202,7 @@ class SimilaritySearcher:
 
     def query(self, smiles: str, top_k: int = 1, verbose=False):
         """
-        查询并返回精确的 Tanimoto 相似度
-        原理：Tanimoto(A,B) = (PopA + PopB - Hamming(A,B)) / (PopA + PopB + Hamming(A,B))
+        Tanimoto(A,B) = (PopA + PopB - Hamming(A,B)) / (PopA + PopB + Hamming(A,B))
         """
         t0 = time.time()
         
@@ -232,6 +222,7 @@ class SimilaritySearcher:
         t_search = time.time() - t1
         
         # 3. 计算精确 Tanimoto
+        # 获取候选集的 Popcounts
         candidate_indices = indices[0]
         valid_mask = candidate_indices != -1
         candidate_indices = candidate_indices[valid_mask]
@@ -239,22 +230,26 @@ class SimilaritySearcher:
         
         candidate_pops = self.popcounts[candidate_indices] 
         
+        # 向量化计算 Tanimoto
+        # Intersection = (PopA + PopB - Hamming) / 2
+        # Union = (PopA + PopB + Hamming) / 2
+        # Tanimoto = Intersection / Union
+        #          = (PopA + PopB - Hamming) / (PopA + PopB + Hamming)
+        
         numerator = q_pop + candidate_pops - candidate_dists
         denominator = q_pop + candidate_pops + candidate_dists
         
-        # 避免除以0 (虽然理论上不可能，除非全0指纹且hamming为0)
         with np.errstate(divide='ignore', invalid='ignore'):
             tanimoto_sims = numerator / denominator
             tanimoto_sims = np.nan_to_num(tanimoto_sims)
             
-        # 4. 重新排序，取真正的 Top K
-        # np.argsort 是升序，我们需要降序
+    
         sorted_args = np.argsort(-tanimoto_sims)
         final_top_k_args = sorted_args[:top_k]
         
         results = []
         for arg in final_top_k_args:
-            idx = candidate_indices[arg]    # 数据库中的内部索引
+            idx = candidate_indices[arg]    
             sim = tanimoto_sims[arg]
             
             orig_idx = self.original_indices[idx]
@@ -276,22 +271,62 @@ class SimilaritySearcher:
             
         return results, times
     
+    def query_mean_pooling_result(self, smiles: str, top_k: int = 5, verbose: bool = False):
+        """
+        
+        Args:
+            smiles (str): 查询分子的 SMILES
+            top_k (int): 取前多少个邻居进行平均 (默认5)
+            verbose (bool): 是否打印日志
+            
+        Returns:
+            dict: 包含 mean pooling 特征的字典，格式与 query 返回的单条结果一致。
+                    如果查询失败或无结果，返回 None.
+        """
+        results, _ = self.query(smiles, top_k=top_k, verbose=verbose)
+        
+        if not results:
+            if verbose:
+                print(f"No neighbors found for {smiles}")
+            return None
+        
+        features_stack = np.stack([item['feature'] for item in results]).astype(np.float32)
+        similarities = [item['similarity'] for item in results]
+        hamming_dists = [item['hamming_dist'] for item in results]
+        
+        
+        mean_feature = np.mean(features_stack, axis=0)
+        avg_similarity = float(np.mean(similarities))
+        avg_hamming = int(np.mean(hamming_dists))
+        
+        
+        result_entry = {
+            'index': -11,                         # -11 just a flag
+            'smiles': smiles,                    
+            'similarity': avg_similarity,        
+            'hamming_dist': avg_hamming,         
+            'feature': mean_feature,             
+            'source_count': len(results)         
+        }
+        
+        return result_entry
+
+    
     def batch_query(self, smiles_list: List[str], top_k: int = 10, verbose: bool = False):
         """
-        批量查询多个 SMILES，返回每个查询的 Top-K 结果
-        
+    
         Returns:
-            List[List[dict]]: 与输入 smiles_list 一一对应的结果
+            List[List[dict]]
         """
         if not smiles_list:
             return []
 
         t0 = time.time()
         
-        # 预分配结果
+        
         final_results = [[] for _ in smiles_list]
 
-        # 1. 批量生成查询指纹
+        
         query_fps = []
         query_pops = []
         valid_indices = []
@@ -319,7 +354,7 @@ class SimilaritySearcher:
         query_fps = np.vstack(query_fps)
         query_pops = np.array(query_pops, dtype=np.int16)
 
-        # 2. FAISS 批量搜索
+        #  FAISS 
         limit_k = 2048
         multiplier = 50
         search_k = max(top_k * multiplier, limit_k)
@@ -329,7 +364,7 @@ class SimilaritySearcher:
         hamming_dists, indices = self.index.search(query_fps, search_k)
         search_time = time.time() - t1
 
-        # 3. 批量精确 Tanimoto 重排序
+        # 3.  Tanimoto 
         for j, orig_idx in enumerate(valid_indices):
             candidate_indices = indices[j]
             candidate_dists = hamming_dists[j]
@@ -351,11 +386,11 @@ class SimilaritySearcher:
             with np.errstate(divide='ignore', invalid='ignore'):
                 tanimoto = np.where(denominator > 0, numerator / denominator, 0.0)
 
-            # 取 Top-K
+            # Top-K
             if len(tanimoto) <= top_k:
                 sorted_args = np.argsort(-tanimoto)
             else:
-                # 使用 argpartition 更快
+                
                 part_idx = np.argpartition(-tanimoto, top_k)[:top_k]
                 sorted_args = part_idx[np.argsort(-tanimoto[part_idx])]
 
@@ -378,59 +413,68 @@ class SimilaritySearcher:
                 f"{time.time() - t0:.3f}s total (FAISS: {search_time:.3f}s)")
 
         return final_results
-
-    def get_random_result(self, seed: int = None):
+    def batch_get_mean_pooling_result(self, smiles_list: List[str], top_k: int = 5, verbose: bool = False):
         """
-        随机从数据库中获取一个分子的特征，作为完全无关的参考。
         
         Args:
-            seed (int, optional): 随机种子。如果传入固定整数，每次调用将返回相同的结果（用于复现）。
-                                  如果不传 (None)，则完全随机。
+            smiles_list (List[str])
+            top_k (int):
+            verbose (bool)
+            
+        Returns:
+            List[dict | None]: 
+                                - success: dict  'feature' (mean pooled) 
+                                - failed: None。
         """
-        import random
+        batch_neighbors = self.batch_query(smiles_list, top_k=top_k, verbose=verbose)
         
-        # 1. 实例化一个独立的随机生成器，避免影响全局的 random.seed()
-        # 如果 seed 为 None，Random 会使用系统时间作为种子
-        rng = random.Random(seed)
+        mean_results = []
         
-        # 2. 检查数据是否为空
-        n_total = len(self.features)
-        if n_total == 0:
-            return None
+        for i, neighbors in enumerate(batch_neighbors):
+            if not neighbors:
+                mean_results.append(None)
+                continue
+            
+            features_stack = np.stack([item['feature'] for item in neighbors]).astype(np.float32)
+            similarities = [item['similarity'] for item in neighbors]
+            hamming_dists = [item['hamming_dist'] for item in neighbors]
+            
+            # (Mean Pooling)
+            mean_feature = np.mean(features_stack, axis=0)
+            avg_sim = float(np.mean(similarities))   
+            avg_ham = int(np.mean(hamming_dists))    
+            
+            
+            result_entry = {
+                'index': -11,                         # -11 just a flag
+                'smiles': smiles_list[i],            #  SMILES
+                'similarity': avg_sim,               
+                'hamming_dist': avg_ham,             
+                'feature': mean_feature,             
+                'source_count': len(neighbors)       
+            }
+            
+            mean_results.append(result_entry)
+            
+        return mean_results
 
-        # 3. 生成随机索引
-        idx = rng.randint(0, n_total - 1)
-        
-        # 4. 返回结果
-        return {
-            'index': int(self.original_indices[idx]),
-            'smiles': self.smiles_list[idx],
-            'similarity': 0.0, 
-            'hamming_dist': -1,
-            'feature': self.features[idx]
-        }
+
 # -----------------------------------------------------------------------------
-# 测试代码
+# for test
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     
     entity_file = 'Data/Train/for_embedding/all_molecules_clean.txt'
     features_path = 'rgcn/global_emb_FP_512/model_epoch197_0.00307_embedding.npy'
-    ckpt_dir = "FusionRetro/models_final_FP512_Noclip_moresize"
+    ckpt_dir = "models"
     os.makedirs(ckpt_dir, exist_ok=True)
     cache_file = f"{ckpt_dir}/fp_cache.npz"
     
     searcher = SimilaritySearcher(entity_file, features_path, cache_file, use_gpu=False)
-    
-    # 测试查询
-    # test_smiles = "COc1cccc2c1C(=O)c1c(O)c3c(c(O)c1C2=O)CC(O)(C(=O)CO)CC3OC1CC(NC(=O)C(F)(F)C(F)(F)F)C(O)C(C)O1" #0.75
-    # test_smiles = "CC(C)C(ON=C(C(=O)NC1C(=O)N(S(=O)(=O)O)C1COC(N)=O)c1csc(N)n1)c1cc(=O)c(O)cn1O"  #0.44
-    # test_smiles = "CC(CC(=O)C(C)C(C)C)C1=C(O)C(=O)C2C3=C(CCC12C)C1(C)CCC(OC2OC(C(=O)O)C(O)C(OC4OCC(O)C(O)C4O)C2O)CC1CC3" #0.24
-    # test_smiles = 'FC(F)(F)Cn1ncnc1-c1cc2n(n1)-c1cc(C3CCNCC3)ccc1OCC2' #Rank 1: Sim=0.6970 | Hamming=20 | ID=895812 SMILES: FC(F)(F)Cn1ncnc1-c1cc2n(n1)-c1cc(Br)ccc1OCC2
-    # test_smiles = 'CC1(C)OCC(C)(CO)N(Cc2ccccc2)C1=O' #Rank 1: Sim=0.6364 | Hamming=16 | ID=220122 SMILES: CC1(CO)COCC(=O)N1Cc1ccccc1
-    test_smiles='CCOC(=O)c1cc2c(F)cccc2nc1[C@H](C)NC(=O)OC(C)(C)C'
+
+    test_smiles = 'CCOC(=O)c1cc2c(F)cccc2nc1[C@H](C)NC(=O)OC(C)(C)C'
     try:
-        results, _ = searcher.query(test_smiles, top_k=5, verbose=True)
+        results, _ = searcher.query(test_smiles, top_k=1, verbose=True)
         
         print(f"\nQuery: {test_smiles}")
         print("-" * 50)

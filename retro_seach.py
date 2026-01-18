@@ -306,17 +306,13 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
     
     answer = []
     aim_size = beam_size
-    # 用于结果去重 (存储排序后的 tuple)
     seen_results = set()
     
     for k in range(len(final_beams)):
         if aim_size == 0:
             break
             
-        # 1. 清洗字符串
         raw_str = final_beams[k][0].replace("^", "").replace("$", "").strip()
-        
-        # 2. 拆分 (使用 set 初步去重，如 A.A -> A)
         reactant_strs = set(raw_str.split("."))
         
         valid_reactants_cano = []
@@ -331,14 +327,9 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
                     all_valid = False
                     break
                 
-                # [修复 1] 清除原子映射 (关键!)
                 for atom in m.GetAtoms():
                     atom.ClearProp('molAtomMapNumber')
-                
-                # [修复 3] 移除显式氢
                 m = Chem.RemoveHs(m)
-                
-                # 生成规范化 SMILES (保留手性)
                 smi = Chem.MolToSmiles(m, isomericSmiles=True)
                 if not smi:
                     all_valid = False
@@ -348,13 +339,9 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
                 all_valid = False
                 break
         
-        # 3. 校验完整性
-        # 如果原始有 3 个部分，处理后必须也是有效的 3 个部分 (或因去重变少，但不能失败)
         if not all_valid or len(valid_reactants_cano) == 0:
             continue
             
-        # 4. [修复 2] 结果去重
-        # 排序以保证 ['A', 'B'] 和 ['B', 'A'] 视为相同
         valid_reactants_cano.sort()
         res_tuple = tuple(valid_reactants_cano)
         
@@ -366,7 +353,7 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
     return answer
 
 # ==========================================
-# 4. A* 搜索主逻辑
+# 4. A* 
 # ==========================================
 def get_route_result(task, searcher=None, idx=None):
     """
@@ -375,23 +362,21 @@ def get_route_result(task, searcher=None, idx=None):
     idx: 任务索引（用于日志标识）
     
     Returns:
-        max_depth (int): 任务设定的最大深度
-        rank (int or None): 命中的排名，未命中为 None
-        log_msgs (list): 执行过程中的日志信息列表
+        max_depth (int)
+        rank (int or None)
+        log_msgs (list)
     """
-    # 用于收集该任务的所有日志信息
     log_msgs = []
     
     max_depth = task["depth"]
     product = task["product"]
     
-    # 任务标识
     task_tag = f"Task-{idx+1}" if idx is not None else f"Task-{product[:15]}"
     
-    # ====================== 初始化：查询产物特征 ======================
+    
     try:
-        results, _ = searcher.query(task["product"], top_k=1)
-        product_exter_feature = results[0]['feature']
+        results= searcher.query_mean_pooling_result(task["product"], top_k=5)
+        product_exter_feature = results['feature']
         if isinstance(product_exter_feature, np.ndarray):
             product_exter_feature = product_exter_feature.reshape(1, -1)
     except Exception as e:
@@ -416,7 +401,7 @@ def get_route_result(task, searcher=None, idx=None):
     total_beam_calls = 0
     total_beam_empty = 0
 
-    # ====================== A* 搜索主循环 ======================
+    # ====================== A* loop ======================
     while len(queue) > 0:
         iteration += 1
         if iteration > 1000:
@@ -459,8 +444,7 @@ def get_route_result(task, searcher=None, idx=None):
                     
             except Exception as e:
                 log_msgs.append(f"[{task_tag}] FAIL-4 get_beam: depth={max_depth}, route_len={len(first_route)}, error={e}")
-                # Optional: log traceback details to msgs if needed, usually too verbose for summary file
-                # log_msgs.append(f"[{task_tag}] Traceback: {traceback.format_exc()}")
+
                 continue
 
             for expansion_solution in expansion_solutions:
@@ -484,8 +468,9 @@ def get_route_result(task, searcher=None, idx=None):
                             estimation_cost += value_fn(reactant)
                             
                             try:
-                                results, _ = searcher.query(reactant, top_k=1)
-                                add_feature = results[0]['feature']
+                            
+                                results = searcher.query_mean_pooling_result(reactant, top_k=5)
+                                add_feature = results['feature']
                                 if isinstance(add_feature, np.ndarray):
                                     add_feature = add_feature.reshape(1, -1)
                                 
@@ -534,11 +519,9 @@ def get_route_result(task, searcher=None, idx=None):
         else:
             queue = nxt_queue
     
-    # ====================== 搜索结束统计 ======================
     if len(answer_set) == 0:
         log_msgs.append(f"[{task_tag}] FAIL-7 No answers: depth={max_depth}, iters={iteration}, beam_calls={total_beam_calls}, beam_empty={total_beam_empty}")
 
-    # ====================== 后处理 ======================
     answer_set = sorted(answer_set, key=lambda x: x["score"])
     record_answers = set()
     final_answer_set = []
@@ -570,21 +553,20 @@ def get_route_result(task, searcher=None, idx=None):
         if len(final_answer_set) >= args.beam_size:
             break
 
-    # ====================== 后处理统计 ======================
     if len(answer_set) > 0 and len(final_answer_set) == 0:
         log_msgs.append(f"[{task_tag}] FAIL-8 All filtered out: depth={max_depth}, raw_answers={len(answer_set)}")
 
-    # ====================== 匹配 Ground Truth ======================
+    # ====================== match Ground Truth ======================
     ground_truth_keys_list = task["targets"] 
     
     for rank, answer in enumerate(final_answer_set):
         answer_keys = answer["answer_keys"]
         for ground_truth_keys in ground_truth_keys_list:
             if ground_truth_keys == answer_keys:
-                # 成功找到，返回结果和累积的日志
+                log_msgs.append(f"[{task_tag}] SUCCESS: iters={iteration}, beam_calls={total_beam_calls}, total_answers={len(final_answer_set)}")
                 return max_depth, rank, log_msgs
 
-    # ====================== 无匹配 ======================
+    
     if len(final_answer_set) > 0:
         log_msgs.append(f"[{task_tag}] FAIL-9 No GT match: depth={max_depth}, preds={len(final_answer_set)}, gt={len(ground_truth_keys_list)}")
 
@@ -904,7 +886,7 @@ if __name__ == "__main__":
         print("No tasks loaded.")
         exit()
 
-    #
+    
     if tasks:
         results = run_parallel_with_logging(tasks, searcher, max_workers=args.workers, log_path=log_file)
         

@@ -340,7 +340,6 @@ class DecoderLayer(nn.Module):
         
         return hidden_states
 
-
 class Decoder(nn.Module):
     """ Decoder """
     def __init__(self, config):
@@ -352,10 +351,6 @@ class Decoder(nn.Module):
         for layer_module in self.layer:
             hidden_states = layer_module(hidden_states, encoder_output, reactants_mask, mutual_mask)
         return hidden_states
-
-
-
-
 
 class Transformer(nn.Module):
     def __init__(self, config):

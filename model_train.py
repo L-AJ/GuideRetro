@@ -25,10 +25,6 @@ RDLogger.DisableLog('rdApp.info')
 
 
 def load_product_features(checkpoint_path):
-    """
-    从checkpoint加载产物特征向量，支持.pt和.npy格式
-    并添加随机初始化的小值向量用于-1索引
-    """
     print(f"Loading product features from {checkpoint_path}")
     
     if checkpoint_path.endswith('.pt'):
@@ -51,7 +47,7 @@ def load_product_features(checkpoint_path):
     pad_vector = torch.zeros(1, feature_dim) 
     features = torch.cat([features, pad_vector], dim=0)
 
-    print(f"特征矩阵形状: {features.shape}, 添加了pad向量用于-1索引")
+    print(f"feat shape: {features.shape}")
     return features.float()
 
 def get_grad_norm(model, norm_type=2):
@@ -102,7 +98,7 @@ entity_file = 'Data/Train/for_embedding/all_molecules_clean.txt'
 features_path = 'rgcn/global_emb_FP_512/embedding.npy'
 
 train_data_file = 'Data/Train/for_model/clean_train_FINAL.json'
-test_data_file = 'Data/Test/test_canolize_dataset.json'
+valid_data_file = 'Data/Train/valid_canolize_dataset.json'
 
 ckpt_dir = "models"
 os.makedirs(ckpt_dir, exist_ok=True)
@@ -126,26 +122,20 @@ config = TransformerConfig(vocab_size=get_vocab_size(),
                            intermediate_size=args.intermediate_size,
                            hidden_dropout_prob=args.hidden_dropout_prob)
 
-try:
-    product_features = load_product_features(features_path)
-    print("Product features loaded with shape:", product_features.shape)
-except Exception as e:
-    print(f"Error loading product features: {e}")
-    raise
 
 # === Get val data dataloader ===
-test_products_dict, test_reactants_dict, test_product_ids_dict = get_dataset_all_feature(
-    test_data_file,
+valid_products_dict, valid_reactants_dict, valid_product_ids_dict = get_dataset_all_feature(
+    valid_data_file,
     entity_file, 
     features_path, 
     cache_file
 )
 
-test_products_list, test_reactants_list, test_product_ids_list = convert_dict_to_list(
-    test_products_dict, test_reactants_dict, test_product_ids_dict
+valid_products_list, valid_reactants_list, valid_product_ids_list = convert_dict_to_list(
+    valid_products_dict, valid_reactants_dict, valid_product_ids_dict
 )
-test_loader = get_eval_dataloader(
-    test_products_list, test_reactants_list, test_product_ids_list, 
+valid_loader = get_eval_dataloader(
+    valid_products_list, valid_reactants_list, valid_product_ids_list, 
     args.batch_size, args.max_length
 )
 
@@ -202,20 +192,17 @@ train_dataloader_list = []
 for depth in list(depth_products_list.keys()):
     train_dataloader_list.append(get_depth_dataloader(depth))
 
-test_products_dict, test_reactants_dict, test_product_ids_dict = get_dataset_all_feature(
-    test_data_file,
-    entity_file, 
-    features_path, 
-    cache_file
-)
 
-test_products_list, test_reactants_list, test_product_ids_list = convert_dict_to_list(
-    test_products_dict, test_reactants_dict, test_product_ids_dict
-)
-test_loader = get_eval_dataloader(
-    test_products_list, test_reactants_list, test_product_ids_list, 
-    args.batch_size, args.max_length
-)
+mean_pooling_features_path = ckpt_dir + '/fp_cache_custom_features.npy'
+try:
+    product_features = load_product_features(mean_pooling_features_path)
+    print("Product mean_pooling_features loaded with shape:", product_features.shape)
+    print("load from:", mean_pooling_features_path)
+except Exception as e:
+    print(f"Error loading product features: {e}")
+    raise
+
+
 
 # ==================== Model ====================
 model = Transformer(config)
@@ -383,8 +370,8 @@ try:
         if epoch % 10 == 0 or epoch >= args.epochs - 100 or epoch == 1:
             model.eval()
             with torch.no_grad():
-                test_loss, step_acc, path_acc, token_acc = evaluate(
-                    model, test_loader, product_features, pad_idx=0
+                valid_loss, step_acc, path_acc, token_acc = evaluate(
+                    model, valid_loader, product_features, pad_idx=0
                 )
 
             current_lrs = [pg['lr'] for pg in optimizer.param_groups]
@@ -392,7 +379,7 @@ try:
             metrics = {
                 'train_loss': avg_loss,
                 'test': {
-                    'loss': test_loss, 
+                    'loss': valid_loss, 
                     'step_acc': step_acc, 
                     'path_acc': path_acc, 
                     'token_acc': token_acc
