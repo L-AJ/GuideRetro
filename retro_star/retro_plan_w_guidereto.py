@@ -1,5 +1,3 @@
-#can do
-# root        : INFO     Succ: 1/75/190 | avg time: 0.20 s | avg iter: 5.00
 import numpy as np
 import torch
 import random
@@ -32,6 +30,8 @@ RDLogger.DisableLog('rdApp.info')
 
 
 
+
+# ==================== 全局预计算（只执行一次）====================
 _products_ids_fixed = None          # [depth, max_len]
 _products_mask_fixed = None
 _reactants_ids_prefix_fixed = None  # 前 k 行固定部分 [depth, max_len]
@@ -51,7 +51,7 @@ def _precompute_fixed_parts(products: List[str], max_depth: int, max_length: int
     depth = len(products)
     _k = depth - 1
 
-    # ---------- products (完全不变) ----------
+    # ---------- products ----------
     _products_ids_fixed  = torch.zeros((depth, max_length), dtype=torch.long, device=device)
     _products_mask_fixed = torch.zeros((depth, max_length), device=device)
 
@@ -75,29 +75,25 @@ def _precompute_fixed_parts(products: List[str], max_depth: int, max_length: int
     # memory mask
     _memory_mask_fixed = torch.ones((depth,), device=device)
 
-# ==================== 超快批量前向（核心）====================
 def get_output_probs_batch_fast(candidates: List[str], 
                                 product_exter_feature,
                                 max_length: int) -> torch.Tensor:
-    """
-    优化版：candidates 是当前正在生成的第 k 行的前缀字符串列表（不含 ^ 和 $）
-    返回 [batch, vocab_size]
-    """
+    
     global _k
     batch_size = len(candidates)
     if batch_size == 0:
         return torch.empty((0, vocab_size), device=device)
 
-    # ==== 直接复制预计算好的固定部分 ====
+    
     products_ids   = _products_ids_fixed.unsqueeze(0).repeat(batch_size, 1, 1)
     products_mask  = _products_mask_fixed.unsqueeze(0).repeat(batch_size, 1, 1)
     reactants_ids  = _reactants_ids_prefix_fixed.unsqueeze(0).repeat(batch_size, 1, 1)
     reactants_mask = _reactants_mask_prefix_fixed.unsqueeze(0).repeat(batch_size, 1, 1)
     memory_mask    = _memory_mask_fixed.unsqueeze(0).repeat(batch_size, 1)
 
-    # ==== 只填充第 k 行（唯一变化的部分）====
+    
     for b, cand in enumerate(candidates):
-        seq = '^' + cand                     # 输入序列：^ + prefix
+        seq = '^' + cand                     
         for j, c in enumerate(seq):
             if j >= max_length:
                 break
@@ -107,20 +103,20 @@ def get_output_probs_batch_fast(candidates: List[str],
             l = max_length
         reactants_mask[b, _k, :l] = 1
 
-    # ==== mask 处理 ====
+    # mask
     mutual_mask    = get_mutual_mask([reactants_mask, products_mask])
     products_mask  = get_padding_mask(products_mask)
     reactants_mask = get_tril_mask(reactants_mask)
     memory_mask    = get_mem_tril_mask(memory_mask)
 
-    # ==== 外部特征 ====
+    
     if isinstance(product_exter_feature, np.ndarray):
         product_exter_feature = torch.from_numpy(product_exter_feature).float().to(device)
     else:
         product_exter_feature = product_exter_feature.to(device)
     expanded_features = product_exter_feature.unsqueeze(0).expand(batch_size, -1, -1)
 
-    # ==== 前向 ====
+   
     with torch.no_grad():
         logits = predict_model(
             products_ids, reactants_ids,
@@ -129,23 +125,23 @@ def get_output_probs_batch_fast(candidates: List[str],
             expanded_features
         )
 
-    # ==== 提取概率（数值稳定）====
+   
     probs = []
     for i, cand in enumerate(candidates):
-        pos = len(cand)                                      # 关键：原始代码就是 len(prefix)
+        pos = len(cand)                                      
         logit = logits[i, _k, pos] / args.temperature
-        prob = torch.nn.functional.softmax(logit, dim=-1)    # 最稳定方式
+        prob = torch.nn.functional.softmax(logit, dim=-1)    
         probs.append(prob)
 
     return torch.stack(probs)  # [batch, vocab_size]
+
+
 def get_beam(products,
              product_exter_feature,
              beam_size: int = 10,
-             step_k: int = 8,          # 推荐 12~16，越大越准确但稍慢
+             step_k: int = 8,
              max_return: int = 10,
              alpha: float = 0.5):
-
-    # ==================== 1. 预计算固定部分（只执行一次）===================
     _precompute_fixed_parts(products, len(products), args.max_length)
 
     EOS_ID = char_to_ix.get('$', -1)
@@ -153,11 +149,12 @@ def get_beam(products,
     max_len = args.max_length
 
     # ==================== 2. Beam 状态 ====================
-    beam_tokens  = [[] for _ in range(beam_size)]               # list[token_id]
-    beam_scores  = torch.zeros(beam_size, device=device)        # 累计 -log10(p)
+    beam_tokens  = [[] for _ in range(beam_size)]
+    beam_scores  = torch.zeros(beam_size, device=device)
     beam_lengths = torch.zeros(beam_size, dtype=torch.int, device=device)
 
-    finished = []  # [(canonical_list, score)]
+    
+    raw_finished = []  # [(raw_string_with_dollar, final_score)]
 
     # ==================== 辅助函数 ====================
     def tokens_to_string(token_list):
@@ -166,36 +163,42 @@ def get_beam(products,
     def is_valid_sequence(seq_with_dollar: str) -> bool:
         if not seq_with_dollar or seq_with_dollar == "$":
             return False
-        for part in seq_with_dollar.split("."):
-            smi = part.replace("$", "")
-            if not smi:
-                continue
-            if Chem.MolFromSmiles(smi) is None:
+        # 去掉$
+        raw_str = seq_with_dollar.replace("$", "")
+        if not raw_str:
+            return False
+        
+        parts = raw_str.split(".")
+        for smi in parts:
+            if not smi: continue
+            try:
+                if Chem.MolFromSmiles(smi) is None:
+                    return False
+            except:
                 return False
         return True
 
-    # ==================== 主循环 ====================
+    # ==================== mian loop ====================
     for step in range(max_len):
         alive_idx = [i for i, tk in enumerate(beam_tokens) if tk is not None]
         if not alive_idx:
             break
 
-        # 当前所有活跃 beam 的前缀（只生成最后一行的字符串）
         if step == 0:
-            current_prefixes = [""]  # 初始空前缀
+            current_prefixes = [""]
         else:
             current_prefixes = [tokens_to_string(beam_tokens[i]) for i in alive_idx]
 
-        # 超快批量前向
+        # 批量前向
         probs = get_output_probs_batch_fast(
             current_prefixes,
             product_exter_feature,
             max_length=args.max_length
-        )  # [alive, vocab]
+        )
 
         log_prob = -torch.log10(probs + 1e-12)
 
-        # ------------------- 长度归一化 + 局部 top-k -------------------
+        # ------------------- top-k -------------------
         if step == 0:
             k_local = min(step_k, vocab_size)
             cand_scores, cand_tokens = torch.topk(log_prob[0], k_local, largest=False)
@@ -218,7 +221,7 @@ def get_beam(products,
             cand_origin = flat_orig[pos]
             cand_tokens = flat_tok[pos]
 
-        # ------------------- 扩展候选 -------------------
+        
         new_tokens = []
         new_scores = []
         new_lengths = []
@@ -235,16 +238,13 @@ def get_beam(products,
 
             if token_id == EOS_ID:
                 completed = ("" if step == 0 else tokens_to_string(beam_tokens[parent_idx])) + '$'
-                if is_valid_sequence(completed):
-                    # 原始归一化方式：除以包含 $ 的总长度
-                    final_score = score / len(completed)
-                    reactants = [r.replace("$", "") for r in completed.split(".") if r.replace("$", "")]
-                    canonical = sorted(Chem.MolToSmiles(Chem.MolFromSmiles(r)) for r in reactants)
-                    finished.append((canonical, final_score))
 
-                    if len(finished) >= max_return:
-                        step = max_len  # 触发 break
-                        break
+                final_score = score / len(completed) if len(completed) > 0 else score
+                
+                raw_finished.append((completed, final_score))
+                
+                if len(raw_finished) >=  max_return :
+                    pass
             else:
                 parent = [] if step == 0 else beam_tokens[parent_idx]
                 new_tokens.append(parent + [token_id])
@@ -254,7 +254,6 @@ def get_beam(products,
         # ---------------- 更新活跃 beam ----------------
         if new_tokens:
             if len(new_tokens) > beam_size:
-                # 按分数从小到大排序（-logp 越小越好）
                 indices = torch.argsort(torch.tensor(new_scores))
                 new_tokens   = [new_tokens[i.item()]   for i in indices[:beam_size]]
                 new_scores   = [new_scores[i.item()]   for i in indices[:beam_size]]
@@ -272,13 +271,42 @@ def get_beam(products,
                 beam_lengths[:num_new] = torch.tensor(new_lengths[:num_new], device=device)
         else:
             break
-
-        if len(finished) >= max_return:
+        
+        if len(raw_finished) >=  max_return:
             break
 
-    # ------------------- 返回结果 -------------------
-    finished.sort(key=lambda x: x[1])
-    return [[can, score] for can, score in finished[:max_return]]
+    # ==================== （Post-processing） ====================
+    
+    #  -logP
+    raw_finished.sort(key=lambda x: x[1])
+
+    final_results = []
+    seen_canonical = set()  
+
+    for seq_with_dollar, score in raw_finished:
+        if len(final_results) >= max_return:
+            break
+        
+        if is_valid_sequence(seq_with_dollar):
+            try:
+                
+                raw_str = seq_with_dollar.replace("$", "")
+                reactants = [r for r in raw_str.split(".") if r]
+                
+                #Canonicalize and sort 
+                canonical_reactants = sorted([Chem.MolToSmiles(Chem.MolFromSmiles(r)) for r in reactants])
+                
+
+                res_tuple = tuple(canonical_reactants)
+                
+                if res_tuple not in seen_canonical:
+                    seen_canonical.add(res_tuple)
+                    final_results.append([list(canonical_reactants), score])
+            except:
+                continue
+
+    # return：[[['reactant1', 'reactant2'], score], ...]
+    return final_results
 
 
 def prepare_molstar_planner(value_fn, starting_mols,
@@ -304,7 +332,8 @@ def molstar(target_mol, target_mol_id, starting_mols, value_fn,
         target_mol=target_mol,
         known_mols=starting_mols,
         value_fn=value_fn,
-        searcher=searcher
+        searcher=searcher,
+        sim_feat_seach_topk=args.sim_feat_seach_topk
     )
 
     i = -1
@@ -384,7 +413,6 @@ def molstar(target_mol, target_mol_id, starting_mols, value_fn,
     return mol_tree.succ, (best_route, i+1)
 
 
-
 def retro_plan():
 
     starting_mols = prepare_starting_molecules(args.starting_molecules)
@@ -392,19 +420,15 @@ def retro_plan():
     routes = pickle.load(open(args.test_routes, 'rb'))
     logging.info('%d routes extracted from %s loaded' % (len(routes),
                                                          args.test_routes))
-    # # # ========== 新增这几行 ==========
-    ### 1.6
-    # 210
-    # 81,107,143,149,264,295,322,359
-    ### 1.5
-    # 405,699,730
-    # INDICES_TO_TEST = [81,98,143,149,264,270,295,322,324,359,409,432,489,604,662,702,767,774,795,903,964,971]  
+    # # # ========== for debug test mol id that you choice ==========
+
+    # INDICES_TO_TEST = [5,26,28,31,88,96,98,101,149,181,185,212,229,281,322,324,409,418,492,600,604,613,720,760,774,790,840,849,876,883,884,930,
+    #                    75,158,264,270,364,434,436,478,650,705,956,987]  
     # routes = [routes[i] for i in INDICES_TO_TEST]
-    # logging.info(f"【调试模式】只运行指定的 {len(routes)} 个分子，索引: {INDICES_TO_TEST}")
+    # logging.info(f"【debug】only {len(routes)} mols，ids: {INDICES_TO_TEST}")
     
     # # ====================================
 
-    # one_step = prepare_mlp(args.mlp_templates, args.mlp_model_dump)
 
     # create result folder
     if not os.path.exists(args.result_folder):
@@ -477,10 +501,10 @@ def retro_plan():
         # if i==74:
         #     raise KeyboardInterrupt
     if args.use_value_fn:
-        with open(args.result_folder + f'/plan_chembl_w_ours_useV_{args.temperature}.pkl', 'wb') as f:
+        with open(args.result_folder + f'/plan_{dataset_name}_w_ours_useV_{args.temperature}_P{args.alpha}.pkl', 'wb') as f:
             pickle.dump(result, f)
     else:
-        with open(args.result_folder + f'/plan_chembl_w_ours_noV_{args.temperature}.pkl', 'wb') as f:
+        with open(args.result_folder + f'/plan_{dataset_name}_w_ours_noV_{args.temperature}_P{args.alpha}.pkl', 'wb') as f:
             pickle.dump(result, f)
 
 if __name__ == '__main__':
@@ -488,10 +512,13 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     
+    filename = os.path.basename(args.test_routes)
+    dataset_name = os.path.splitext(filename)[0]
+
     if args.use_value_fn:
-        setup_logger(f'plan_chembl_w_ours_useV_{args.temperature}.log')
+        setup_logger(f'plan_{dataset_name}_w_ours_useV_{args.temperature}_P{args.alpha}.log')
     else:
-        setup_logger(f'plan_chembl_w_ours_noV_{args.temperature}.log')
+        setup_logger(f'plan_{dataset_name}_w_ours_noV_{args.temperature}_P{args.alpha}.log')
     logging.info('seed: %d' % args.seed)
     logging.info('temperature: %.2f' % args.temperature)
     logging.info("iterations: %d" % args.iterations)
@@ -499,6 +526,7 @@ if __name__ == '__main__':
     logging.info("step_k: %d" % args.step_k)
     logging.info("maxreturn: %d" % args.maxreturn)
     logging.info("alpha: %.2f" % args.alpha)
+    logging.info('sim_feat_seach_topk: %d' % args.sim_feat_seach_topk)
     logging.info('test_routes: %s' % args.test_routes)
     
     char_to_ix = get_char_to_ix()
@@ -506,12 +534,14 @@ if __name__ == '__main__':
     vocab_size = get_vocab_size()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    # Paths
     entity_file = 'Data/Train/for_embedding/all_molecules_clean.txt'
     features_path = 'rgcn/global_emb_FP_512/model_epoch197_0.00307_embedding.npy'
-    ckpt_dir = "FusionRetro/models_final_FP512_Noclip_moresize"
+    ckpt_dir = "models"
     os.makedirs(ckpt_dir, exist_ok=True)
-    cache_file = f"{ckpt_dir}/fp_cache.npz"
-    checkpoint_path = f"{ckpt_dir}/finetune_best_model_ffn_gate_path_6249_2728.pth"
+    cache_file = ckpt_dir + "/fp_cache.npz"
+    checkpoint_path = ckpt_dir + "/finetune_best_model_mean_2893.pth"
+
     searcher = SimilaritySearcher(entity_file, features_path, cache_file, use_gpu=False)
     logging.info("Similarity Searcher initialized.")
 
@@ -538,4 +568,4 @@ if __name__ == '__main__':
 
     retro_plan()
 
-# python retro_star/retro_plan_w_trans.py --use_value_fn --temperature 0.9 --beamsize 10 --step_k 8 --maxreturn 10 --alpha 0.5 --iterations 50
+# python retro_star/retro_plan_w_trans.py --use_value_fn --temperature 1.5 --test_routes 'Data/Test/retro*_190.pkl'
