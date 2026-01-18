@@ -77,7 +77,7 @@ def value_fn(smi):
     if smi in value_cache:
         return value_cache[smi]
     
-    # 3. 计算指纹并推理
+   
     try:
         fp = smiles_to_fp(smi, fp_dim=args.fp_dim).reshape(1, -1)
         fp_tensor = torch.from_numpy(fp).float().to(device)
@@ -85,9 +85,9 @@ def value_fn(smi):
         with torch.inference_mode():
             v = value_model(fp_tensor).item()
     except:
-        v = 0.0 # 出错时回退到 0
+        v = 0.0 
     
-    # 简单缓存清理
+    
     if len(value_cache) > 200000:
         value_cache.clear()
         
@@ -131,9 +131,6 @@ def check_reactants_are_material(reactants):
 
 
 def prepare_encoder_inputs(products_list, max_depth, max_length):
-    """
-    预计算 Encoder 输入，直接在 GPU 上初始化
-    """
     batch_size = len(products_list)
     products_input = torch.zeros((batch_size, max_depth, max_length), device=device, dtype=torch.long)
     products_input_mask = torch.zeros((batch_size, max_depth, max_length), device=device)
@@ -149,7 +146,6 @@ def prepare_encoder_inputs(products_list, max_depth, max_length):
     return products_input, products_input_mask
 
 def prepare_decoder_inputs_fast(products_list, candidates, max_depth, max_length):
-    
     batch_size = len(candidates)
     
     reactants_input = torch.zeros((batch_size, max_depth, max_length), device=device, dtype=torch.long)
@@ -172,9 +168,6 @@ def prepare_decoder_inputs_fast(products_list, candidates, max_depth, max_length
     return reactants_input, reactants_input_mask, memory_input_mask
 
 def get_output_probs_vectorized(products_tensors, candidates, products_len, max_depth, max_length, product_exter_feature):
-    """
-    完全向量化的概率计算
-    """
     batch_size = len(candidates)
     
     # 1. Expand Encoder Inputs
@@ -260,7 +253,6 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
         k_candidates = min(flat_scores.shape[0], object_size)
         topk_scores, topk_indices = torch.topk(flat_scores, k=k_candidates, largest=False)
 
-        # === 核心修复：detach() ===
         topk_scores = topk_scores.detach().cpu().numpy()
         topk_indices = topk_indices.detach().cpu().numpy()
         
@@ -353,13 +345,13 @@ def get_beam(products, product_exter_feature, beam_size, length_penalty_alpha=1)
     return answer
 
 # ==========================================
-# 4. A* 
+# 4. A* seach
 # ==========================================
 def get_route_result(task, searcher=None, idx=None):
     """
-    task: 任务字典
-    searcher: 相似性搜索器
-    idx: 任务索引（用于日志标识）
+    tas
+    searcher
+    idx
     
     Returns:
         max_depth (int)
@@ -573,7 +565,7 @@ def get_route_result(task, searcher=None, idx=None):
     return max_depth, None, log_msgs
 
 def run_parallel_with_logging(tasks, searcher, max_workers=8, log_path="retro_search_log.txt"):
-    # results存储：(depth, rank, log_msgs)
+    # results：(depth, rank, log_msgs)
     results = [None] * len(tasks)
     overall_hit = np.zeros(args.beam_size, dtype=int)
     overall_total = 0
@@ -585,11 +577,10 @@ def run_parallel_with_logging(tasks, searcher, max_workers=8, log_path="retro_se
                  "  ".join([f"Top-{k+1:>8}" for k in range(args.beam_size)])
         f.write(header + "\n")
     
-    print(f"\n开始测试集并行推理，共 {len(tasks)} 个分子 (Workers={max_workers})")
-    print(f"日志路径: {log_path}\n")
+    print(f"\n total {len(tasks)} tasks  (Workers={max_workers})")
+    print(f"log path: {log_path}\n")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # 提交任务，future_to_info 映射 future -> (task_idx, task_data)
         future_to_info = {
             executor.submit(get_route_result, task, searcher, i): (i, task) 
             for i, task in enumerate(tasks)
@@ -600,55 +591,44 @@ def run_parallel_with_logging(tasks, searcher, max_workers=8, log_path="retro_se
 
         for future in concurrent.futures.as_completed(future_to_info):
             idx, task = future_to_info[future]
-            
-            # 1. 获取结果或捕获异常
+          
             try:
-                # 现在的返回值是三个：depth, rank, log_messages
                 max_depth, rank, log_msgs = future.result()
                 res_tuple = (max_depth, rank, log_msgs)
             except Exception as e:
-                # 异常处理：尝试获取depth，并生成一条异常日志
                 current_depth = task.get("depth", -1) if isinstance(task, dict) else -1
                 err_msg = [f"[Task-{idx}] SYSTEM ERROR: {str(e)}", traceback.format_exc()]
                 res_tuple = (current_depth, None, err_msg)
             
-            # 2. 存入待写入队列
+            
             pending_results[idx] = res_tuple
             results[idx] = res_tuple 
 
-            # 3. 按顺序写入文件
             with open(log_path, "a", encoding="utf-8") as f:
                 while next_to_write in pending_results:
                     d_depth, d_rank, d_logs = pending_results.pop(next_to_write)
-                    
-                    # 更新统计
+                   
                     overall_total += 1
                     if d_rank is not None:
                         overall_hit[d_rank:] += 1
-                    
-                    # 格式化输出字符串
+                  
                     cur_acc = 100.0 * overall_hit / (overall_total + 1e-8)
                     now = datetime.datetime.now().strftime("%m-%d %H:%M:%S")
                     
                     rank_str = f"{d_rank+1}" if d_rank is not None else "Miss"
                     acc_str = "  ".join([f"Top-{k+1}:{cur_acc[k]:6.2f}%" for k in range(args.beam_size)])
                     
-                    # 安全格式化 depth
                     if d_depth is not None and d_depth != -1:
                         depth_str = f"{d_depth:5d}"
                     else:
                         depth_str = "  ERR"
 
-                    # 写入标准统计行
                     line = f"{now}  {next_to_write+1:4d}  {depth_str}  {rank_str:>6}  {acc_str}"
                     
-                    
-                    # 写入该任务附带的日志信息（如果有）
                     if d_logs:
                         joined_logs = "; ".join(d_logs)
                         line += f"  || LOG: {joined_logs}"
-                    
-                    # 3. 写入最终的一行
+
                     f.write(line + "\n")
                     
                     pbar.set_postfix_str(f"Logged:#{next_to_write+1} R={rank_str} | {acc_str[:35]}...")
@@ -668,8 +648,7 @@ def load_dataset(split, data_dir="/root/AKG/Data"):
         
     dataset = [] 
     total_gt_sets_count = 0  #
-    
-    # === 新增统计变量 ===
+
     count_valid_products = 0     
     count_no_materials = 0       
     
@@ -677,35 +656,31 @@ def load_dataset(split, data_dir="/root/AKG/Data"):
     
     with open(file_name, 'r') as f:
         _dataset = json.load(f)
-        
-        # 遍历每一个数据项
+     
         for _, reaction_trees in tqdm(_dataset.items(), desc="Processing Data"):
-            # 1. 处理产物 Product
             try:
-                # 尝试提取 SMILES 字符串
                 if 'retro_routes' in reaction_trees.get('1', {}) and len(reaction_trees['1']['retro_routes']) > 0:
                     raw_prod = reaction_trees['1']['retro_routes'][0][0].split('>')[0]
                 else:
-                    continue # 连基本结构都没有，直接跳过
+                    continue 
                 
-                # 这里保留你原有的重构逻辑
+                
                 mol = Chem.MolFromInchi(Chem.MolToInchi(Chem.MolFromSmiles(raw_prod)))
                 if mol: 
                     product_smi = Chem.MolToSmiles(mol)
                 else:
                     product_smi = raw_prod
                 
-                # 再次规范化
                 _, product = cano_smiles(product_smi)
-                if product is None: continue # 如果产物都不合法，跳过该条目
+                if product is None: continue 
                 
-                count_valid_products += 1 # 产物合法，计数+1
+                count_valid_products += 1 
 
             except Exception:
                 continue
 
-            # 2. 处理起始材料 Targets (转化为 InChIKey Set)
-            valid_gt_sets = [] # 存储当前分子的所有有效 GT 集合
+
+            valid_gt_sets = [] 
             
             num_trees = int(reaction_trees.get('num_reaction_trees', 0))
             
@@ -719,37 +694,33 @@ def load_dataset(split, data_dir="/root/AKG/Data"):
                 is_route_valid = True
                 
                 for mat in materials:
-                    # 获取 InChIKey (前14位)
+                    
                     key = get_inchikey_prefix(mat)
                     if key is None:
                         is_route_valid = False
                         break
                     current_set.add(key)
                 
-                # 只有当该路线所有原料都合法，且非空时，才加入
                 if is_route_valid and len(current_set) > 0:
                     valid_gt_sets.append(current_set)
             
-            # 3. 如果存在有效的 GT 集合，则添加到数据集
             if valid_gt_sets:
                 dataset.append({
                     "product": product, 
-                    "targets": valid_gt_sets, # 这里直接存储 list of sets
+                    "targets": valid_gt_sets,
                     "depth": reaction_trees.get('depth', 0)
                 })
                 total_gt_sets_count += len(valid_gt_sets)
             else:
-                # 这是一个“有产物但无原料”的孤儿数据
+                
                 count_no_materials += 1
 
-    # === 输出统计结果 ===
     print(f"\nDataset '{split}' loaded successfully.")
     print(f"Total valid products processed: {count_valid_products}")
     print(f"--------------------------------------------------")
     print(f"1. Molecules KEPT (have >0 valid routes): {len(dataset)}")
     print(f"2. Molecules DROPPED (have 0 valid routes): {count_no_materials}")
     
-    # 统计覆盖率
     if count_valid_products > 0:
         coverage = (len(dataset) / count_valid_products) * 100
         print(f"   -> Coverage (Kept / Valid Products): {coverage:.2f}%")
