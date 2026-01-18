@@ -56,7 +56,7 @@ python model_train.py --batch_size 32 --epochs 300
 ```
 ### 2. Evaluation 
 ```text
-**For Exact Match Results**
+** For Exact Match Results **
 # Greedy dfs
 python greedy_dfs.py --beam_size 5 --temperature 2.2
 # Retro* seach
@@ -64,7 +64,7 @@ python retro_search.py --use_value --beam_size 5 ----temperature 2.2
 # Retro*-0 seach
 python retro_search.py --beam_size 5 --temperature 2.2
 
-**For Success Rate Results**
+** For Success Rate Results **
 python retro_star/retro_plan.py --temperature 1.5
 ```
 
