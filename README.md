@@ -51,8 +51,9 @@ To strictly adhere to the double-blind review policy and avoid potential identit
 We provide training scripts and configuration files to ensure reproducibility from scratch. The checkpoints will be released immediately upon acceptance.
 ### 1. Training
 ```text
-# Global
-
+# Global Embedding 
+python Dataprocess/get_reaction_score.py Data/Train/for_embedding/all_molecules_clean.txt Data/Train/for_embedding/clean_reactions.txt
+python RGCN.py --hid_size 512 --batch_size 3000 --score_file Data/Train/for_embedding/clean_reactions_scscore.txt 
 # Single-step model train
 python model_train.py --batch_size 32 --epochs 300
 ```
