@@ -20,13 +20,14 @@ parser.add_argument('--temperature', type=float, default=1.5, help='Temperature 
 parser.add_argument('--beamsize', type=int, default=10, help='Beam size for decoding. Default 10')
 parser.add_argument('--step_k', type=int, default=8, help='beam branching factor at each step. Default 8')
 parser.add_argument('--maxreturn', type=int, default=10, help='Max number of complete beam to return for select. Default 10')
-parser.add_argument('--alpha', type=float, default=0.6, help='Length penalty coefficient. Default 0.6')
+parser.add_argument('--alpha', type=float, default=1, help='Length penalty coefficient. Default 1')
+parser.add_argument('--sim_feat_seach_topk', type=int, default=5, help='top k for sim feat searcher')
 
 # =================== random seed ================== #
 parser.add_argument('--seed', type=int, default=1234)
 
 # ==================== dataset ===================== #
-parser.add_argument('--test_routes',default='Data/Test/chembl_1000.pkl')
+parser.add_argument('--test_routes',default='Data/Test/retro*_190.pkl')
 parser.add_argument('--starting_molecules', default='FusionRetro/retro_star/dataset/origin_dict.csv')
 
 # ================== value dataset ================= #
