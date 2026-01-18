@@ -47,6 +47,8 @@ python Dataprocess/get_clear_train_data.py
 
 ```
 ## 🚀 Usage (运行)
+To strictly adhere to the double-blind review policy and avoid potential identity leakage via file metadata, pre-trained checkpoints are not included in this anonymous submission.
+We provide training scripts and configuration files to ensure reproducibility from scratch. The checkpoints will be released immediately upon acceptance.
 ### 1. Training
 ```text
 # Global
