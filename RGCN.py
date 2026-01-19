@@ -94,7 +94,7 @@ class RGCN(nn.Module):
         return self.dropout(h)
     
     def forward_full(self, blocks, feats):
-        h = feats  # [input_nodes数, h_dim]
+        h = feats  # [input_nodes, h_dim]
         
         for i, (layer, block) in enumerate(zip(self.layers, blocks)):
             block = block.to(h.device)
