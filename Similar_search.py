@@ -64,7 +64,6 @@ class SimilaritySearcher:
         self.use_gpu = use_gpu
         self.num_workers = num_workers if num_workers else max(1, multiprocessing.cpu_count() - 2)
         
-        # 核心数据
         self.index = None
         self.fingerprints = None    # uint8 array (N, 256)
         self.popcounts = None       # int16 array (N,) 
@@ -156,7 +155,6 @@ class SimilaritySearcher:
             )
 
     def _build_index(self):
-        """构建 FAISS Binary Index"""
         d = self.fingerprints.shape[1] * 8 # bits, usually 2048
         print(f"Building FAISS Binary Index for {d} bits...")
         
@@ -185,7 +183,6 @@ class SimilaritySearcher:
                 print("Warning: faiss-gpu does not support binary indexes perfectly in all versions, using CPU.")
 
     def _smi_to_fp_and_pop(self, smiles):
-        """辅助函数：单条查询转指纹和popcount"""
         generator = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
@@ -206,12 +203,8 @@ class SimilaritySearcher:
         """
         t0 = time.time()
         
-        # 1. 生成查询指纹
         q_fp, q_pop = self._smi_to_fp_and_pop(smiles)
         
-        # 2. FAISS 搜索 (Hamming Distance)
-        # 策略：为了得到精确的TopK Tanimoto，我们需要在汉明距离上多取一些样本 (Oversampling)
-        # 因为 Hamming 排序 != Tanimoto 排序 (虽然强相关)
         limit_k = 2048
         multiplier = 50
         search_k = max(top_k * multiplier, limit_k)
@@ -220,17 +213,14 @@ class SimilaritySearcher:
         t1 = time.time()
         hamming_dists, indices = self.index.search(q_fp, search_k)
         t_search = time.time() - t1
-        
-        # 3. 计算精确 Tanimoto
-        # 获取候选集的 Popcounts
+     
         candidate_indices = indices[0]
         valid_mask = candidate_indices != -1
         candidate_indices = candidate_indices[valid_mask]
         candidate_dists = hamming_dists[0][valid_mask]
         
         candidate_pops = self.popcounts[candidate_indices] 
-        
-        # 向量化计算 Tanimoto
+      
         # Intersection = (PopA + PopB - Hamming) / 2
         # Union = (PopA + PopB + Hamming) / 2
         # Tanimoto = Intersection / Union
@@ -272,17 +262,6 @@ class SimilaritySearcher:
         return results, times
     
     def query_mean_pooling_result(self, smiles: str, top_k: int = 5, verbose: bool = False):
-        """
-        
-        Args:
-            smiles (str): 查询分子的 SMILES
-            top_k (int): 取前多少个邻居进行平均 (默认5)
-            verbose (bool): 是否打印日志
-            
-        Returns:
-            dict: 包含 mean pooling 特征的字典，格式与 query 返回的单条结果一致。
-                    如果查询失败或无结果，返回 None.
-        """
         results, _ = self.query(smiles, top_k=top_k, verbose=verbose)
         
         if not results:
@@ -314,7 +293,6 @@ class SimilaritySearcher:
     
     def batch_query(self, smiles_list: List[str], top_k: int = 10, verbose: bool = False):
         """
-    
         Returns:
             List[List[dict]]
         """
@@ -379,7 +357,7 @@ class SimilaritySearcher:
             cand_pops = self.popcounts[cand_idx]
             q_pop = query_pops[j]
 
-            # 向量化 Tanimoto
+            #  Tanimoto
             numerator = q_pop + cand_pops - cand_dist
             denominator = q_pop + cand_pops + cand_dist
             
