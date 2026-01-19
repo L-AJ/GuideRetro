@@ -30,20 +30,15 @@ RDLogger.DisableLog('rdApp.info')
 
 
 
-
-# ==================== 全局预计算（只执行一次）====================
 _products_ids_fixed = None          # [depth, max_len]
 _products_mask_fixed = None
-_reactants_ids_prefix_fixed = None  # 前 k 行固定部分 [depth, max_len]
+_reactants_ids_prefix_fixed = None  
 _reactants_mask_prefix_fixed = None
 _memory_mask_fixed = None           # [depth]
 _k = None                           # depth - 1
 
 
 def _precompute_fixed_parts(products: List[str], max_depth: int, max_length: int):
-    """
-    在每次新分子（新的 products 列表）进入 beam search 前调用一次
-    """
     global _products_ids_fixed, _products_mask_fixed
     global _reactants_ids_prefix_fixed, _reactants_mask_prefix_fixed
     global _memory_mask_fixed, _k
@@ -148,7 +143,6 @@ def get_beam(products,
     depth = len(products)
     max_len = args.max_length
 
-    # ==================== 2. Beam 状态 ====================
     beam_tokens  = [[] for _ in range(beam_size)]
     beam_scores  = torch.zeros(beam_size, device=device)
     beam_lengths = torch.zeros(beam_size, dtype=torch.int, device=device)
@@ -156,14 +150,13 @@ def get_beam(products,
     
     raw_finished = []  # [(raw_string_with_dollar, final_score)]
 
-    # ==================== 辅助函数 ====================
     def tokens_to_string(token_list):
         return ''.join(ix_to_char[tid] for tid in token_list) if token_list else ''
 
     def is_valid_sequence(seq_with_dollar: str) -> bool:
         if not seq_with_dollar or seq_with_dollar == "$":
             return False
-        # 去掉$
+        
         raw_str = seq_with_dollar.replace("$", "")
         if not raw_str:
             return False
@@ -189,7 +182,7 @@ def get_beam(products,
         else:
             current_prefixes = [tokens_to_string(beam_tokens[i]) for i in alive_idx]
 
-        # 批量前向
+       
         probs = get_output_probs_batch_fast(
             current_prefixes,
             product_exter_feature,
@@ -251,7 +244,6 @@ def get_beam(products,
                 new_scores.append(score)
                 new_lengths.append((1 if step == 0 else beam_lengths[parent_idx].item()) + 1)
 
-        # ---------------- 更新活跃 beam ----------------
         if new_tokens:
             if len(new_tokens) > beam_size:
                 indices = torch.argsort(torch.tensor(new_scores))
@@ -369,10 +361,9 @@ def molstar(target_mol, target_mol_id, starting_mols, value_fn,
                 scores = []
                 for reactants, score in result:
                     reactant_lists.append(reactants)
-                    # 保证 score 是 float
                     scores.append(score.cpu().item() if torch.is_tensor(score) else float(score))
                 costs = np.array(scores)
-                templates = [''] * len(reactant_lists)  # 如果没有模板信息，可设为None
+                templates = [''] * len(reactant_lists)  
 
                 assert m_next.open
                 succ = mol_tree.expand(m_next, reactant_lists, costs, templates)
