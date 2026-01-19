@@ -83,7 +83,7 @@ def main(molecules_file: str, reactions_file: str):
 
 
     processed = 0
-    positive_count = 0  # score_diff > 0 的反应数
+    positive_count = 0  
 
     with open(reactions_file, "r", encoding="utf-8") as fin, \
          open(out_file, "w", encoding="utf-8") as fout:
@@ -105,7 +105,6 @@ def main(molecules_file: str, reactions_file: str):
             if diff > 0:
                 positive_count += 1
 
-    # 最终统计报告
     positive_ratio = positive_count / processed * 100 if processed > 0 else 0
 
 
