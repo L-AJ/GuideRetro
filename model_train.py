@@ -51,20 +51,11 @@ def load_product_features(checkpoint_path):
     return features.float()
 
 def get_grad_norm(model, norm_type=2):
-    """
-    计算模型所有参数的梯度范数
-    Args:
-        model: PyTorch模型
-        norm_type: 范数类型，默认L2范数
-    Returns:
-        total_norm: 梯度范数值
-    """
     parameters = [p for p in model.parameters() if p.grad is not None]
     if len(parameters) == 0:
         return 0.0
     
     device = parameters[0].grad.device
-    # 使用 detached grad 避免显存泄漏
     total_norm = torch.norm(
         torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
         norm_type
@@ -489,4 +480,5 @@ finally:
                 f.write(line + "\n")
         print(f"\nSummary appended to: {log_file}")
     except Exception as e:
+
         print(f"Warning: Could not write summary to log file: {e}")
