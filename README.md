@@ -3,7 +3,7 @@
 Multi-step retrosynthetic planning aims to decompose target molecules into available starting materials by iteratively invoking single-step prediction models within a search algorithm. 
 The success of retrosynthetic planning depends on the joint guidance of single-step reasoning and global search across steps. 
 However, most existing frameworks make step-wise decisions based only on the current molecular state, without explicitly modeling synthesizability signals that reflect long-range reachability. 
-In this work, we propose \textbf{GuideRetro}, a synthesizability-aware framework for multi-step retrosynthetic planning that integrates global synthesizability knowledge into step-wise retrosynthetic prediction. GuideRetro learns transferable knowledge from large-scale reaction networks by modeling the evolution of synthetic complexity along reaction pathways. 
+In this work, we propose GuideRetro, a synthesizability-aware framework for multi-step retrosynthetic planning that integrates global synthesizability knowledge into step-wise retrosynthetic prediction. GuideRetro learns transferable knowledge from large-scale reaction networks by modeling the evolution of synthetic complexity along reaction pathways. 
 During planning, a route-aware synthesis state modeling module combines the evolving retrosynthetic route with retrieved global signals to guide reactant generation at each step. 
 Experiments on benchmark datasets show that GuideRetro achieves state-of-the-art performance. The integration of global synthesizability knowledge and route-aware modeling improves planning accuracy and search efficiency under realistic retrosynthetic settings. 
 ## 🛠️ Requirements
@@ -51,10 +51,6 @@ To strictly adhere to the double-blind review policy and avoid potential identit
 We provide training scripts and configuration files to ensure reproducibility from scratch. The checkpoints will be released immediately upon acceptance.
 ### 1. Training
 ```text
-# Global Embedding 
-python Dataprocess/get_reaction_score.py Data/Train/for_embedding/all_molecules_clean.txt Data/Train/for_embedding/clean_reactions.txt
-python RGCN.py --hid_size 512 --batch_size 3000 --score_file Data/Train/for_embedding/clean_reactions_scscore.txt 
-# Single-step model train
 python model_train.py --batch_size 32 --epochs 300
 ```
 ### 2. Evaluation 
