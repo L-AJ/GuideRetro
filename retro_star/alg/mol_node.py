@@ -32,9 +32,7 @@ class MolNode:
             stacked = np.vstack((self.parent.parent.product_exter_feature, feat))
             self.product_exter_feature = stacked  # shape: [step, feature_dim]
 
-        # ✅ 保证最终 shape 为 [step, feature_dim]（即二维）
         if isinstance(self.product_exter_feature, np.ndarray) and self.product_exter_feature.ndim == 3:
-            # 如果上层逻辑不小心多包了一层，这里自动去掉
             self.product_exter_feature = self.product_exter_feature.squeeze(0)
 
         self.is_known = is_known
