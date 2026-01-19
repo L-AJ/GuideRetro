@@ -51,7 +51,7 @@ def get_eval_dataloader(products_list, reactants_list, product_ids_list, batch_s
         products_input_mask, 
         reactants_input_mask, 
         memory_input_mask,
-        product_ids  # 新增产物ID
+        product_ids  
     )
     
     
