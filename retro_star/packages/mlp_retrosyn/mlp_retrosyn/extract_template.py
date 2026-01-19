@@ -1,8 +1,3 @@
-"""
-Modified version of:
-<https://github.com/connorcoley/ochem_predict_nn/blob/master/data/generate_reaction_templates.py>
-"""
-
 import os
 from tqdm import tqdm
 from pprint import pprint
