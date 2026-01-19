@@ -8,7 +8,7 @@ During planning, a route-aware synthesis state modeling module combines the evol
 Experiments on benchmark datasets show that GuideRetro achieves state-of-the-art performance. The integration of global synthesizability knowledge and route-aware modeling improves planning accuracy and search efficiency under realistic retrosynthetic settings. 
 ## 🛠️ Requirements
 All the required packages can be installed by running `pip install -r requirements.txt`.
-## 📂 Data PreparationData 
+## 📂 Data Preparation 
 ### 1. Download Steps
 
 1.  **RetroBench & Zinc Stock**: Download **[RetroBench and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)** and place the files into `Data/`.
