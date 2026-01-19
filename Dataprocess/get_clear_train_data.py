@@ -148,19 +148,15 @@ def clean_and_merge_train_jsons(
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(merged_clean, f, indent=2, ensure_ascii=False)
 
-    # ====================== 最终报告 ======================
     print("\n" + "="*88)
-   
     print(f"save path           → {os.path.abspath(output_json)}")
     print("="*88)
     print("="*88)
 
 
-# ====================== 一键运行 ======================
 if __name__ == "__main__":
     TRAIN_JSONS = [
         "Data/Train/for_model/train_canolize_dataset.json"
-    
     ]
 
     TEST_SMILES = "final_test_smiles.txt"
