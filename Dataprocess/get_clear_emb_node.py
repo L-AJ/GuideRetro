@@ -76,7 +76,6 @@ def generate_clean_test_set(json_path: str, pkl_paths: List[str], output_txt: st
 
 
     raw_targets = []
-    print(f"读取 JSON ← {json_path}")
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     raw_targets.extend(str(k).strip() for k in data.keys() if str(k).strip())
@@ -110,7 +109,6 @@ def generate_clean_test_set(json_path: str, pkl_paths: List[str], output_txt: st
     return output_txt, test_set
 
 
-# ================== 第二步：彻底清洗 CSV（零污染 + 超高速）==================
 def clean_csv_reactions(csv_paths: List[str], test_set: Set[str]):
     csv_dir = os.path.dirname(csv_paths[0]) if csv_paths else "."
     os.makedirs(csv_dir, exist_ok=True)
@@ -214,8 +212,6 @@ def clean_csv_reactions(csv_paths: List[str], test_set: Set[str]):
     print(f"   reactions → {rxn_file}")
     print("="*80)
 
-
-# ================== 主程序 ==================
 if __name__ == "__main__":
     TEST_JSON = "Data/Test/test_dataset.json"
     TEST_PKLS = [
