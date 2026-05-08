@@ -85,6 +85,8 @@ GuideRetro/
 
 ## Training
 
+> **Checkpoints available:** model checkpoints are provided. Download `GuideRetro.7z` from [Google Drive](https://drive.google), decompress, and place the contents under the project root to skip training.
+
 The training pipeline has two stages:
 ### Stage 1.1 — Generate Packed Fingerprints
 
@@ -171,7 +173,7 @@ python retro_seach.py --use_value --beam_size 5 --temperature 2.2
 python retro_seach.py --beam_size 5 --temperature 2.2
 ```
 
-### Success Rate Results (Full Route Planning)
+### Success Rate Results 
 
 ```bash
 # Retro* search (with value function)
