@@ -85,14 +85,17 @@ GuideRetro/
 
 ## Training
 
-The training pipeline has three stages:
-
-### Stage 1: Train RGCN Molecular Embeddings
+The training pipeline has two stages:
+### Stage 1.1 — Generate Packed Fingerprints
 
 ```bash
 python Dataprocess/get_fp_packed.py
 ```
-Trains a TransE (l2) knowledge graph embedding model with fingerprint-based initialization. This learns molecular representations from the reaction knowledge graph (head → relation → tail triples).
+
+Compresses 2048-bit Morgan fingerprints into 256-byte packed arrays (8x space reduction). This is the initialization source for Stage 1.2.
+**Output:** `Data/Train/for_embedding/fingerprints_packed.npy`
+
+### Stage 1.2 — Pretrain TransE KG Embeddings
 
 ```bash
 DGLBACKEND=pytorch python pretrain_kg_embedding_FP.py \
@@ -115,9 +118,11 @@ DGLBACKEND=pytorch python pretrain_kg_embedding_FP.py \
     --fp_path Data/Train/for_embedding/fingerprints_packed.npy
 ```
 
-**Output:** Embeddings saved to `ckpts/TransE_l2_Embedding_*_*/`. The key file is `Embedding_TransE_l2_entity.npy`.
+Learns molecular representations from the reaction knowledge graph (head -> relation -> tail triples), initialized from packed fingerprints.
 
-Trains a Relational Graph Convolutional Network with BPR (Bayesian Personalized Ranking) loss on the reaction knowledge graph.
+**Output:** `ckpts/TransE_l2_Embedding_*_*/Embedding_TransE_l2_entity.npy`
+
+### Stage 1.3 — Train RGCN Embeddings
 
 ```bash
 python RGCN.py \
@@ -127,7 +132,10 @@ python RGCN.py \
     --score_file Data/Train/for_embedding/clean_reactions_scscore.txt
 ```
 
-**Outputs:** `rgcn/global_emb_FP_512/embedding.npy` (shape: `num_molecules × 512`)
+Refines the TransE embeddings through a 2-layer Relational Graph Convolutional Network with BPR loss.
+
+**Output:** `rgcn/global_emb_FP_512/embedding.npy` (shape: `num_molecules x 512`)
+
 
 ### Stage 2: Train Single-Step Transformer
 
@@ -175,5 +183,8 @@ python retro_star/retro_plan_w_guidereto.py \
 
 
 ## References
-
+- GLN: [https://github.com/Hanjun-Dai/GLN](https://github.com/Hanjun-Dai/GLN)
+- retro_star: [https://github.com/binghong-ml/retro_star](https://github.com/binghong-ml/retro_star)
+- FusionRetro: [https://github.com/SongtaoLiu0823/FusionRetro](https://github.com/SongtaoLiu0823/FusionRetro)
+  
 If you use this code in your research, please cite the GuideRetro paper.
