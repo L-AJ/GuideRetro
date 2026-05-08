@@ -1,72 +1,150 @@
-# GuideRetro ： Toward Synthesizability-Aware Multi-Step Retrosynthetic Planning
-## 📝 Abstract 
-Multi-step retrosynthetic planning aims to decompose target molecules into available starting materials by iteratively invoking single-step prediction models within a search algorithm. 
-The success of retrosynthetic planning depends on the joint guidance of single-step reasoning and global search across steps. 
-However, most existing frameworks make step-wise decisions based only on the current molecular state, without explicitly modeling synthesizability signals that reflect long-range reachability. 
-In this work, we propose GuideRetro, a synthesizability-aware framework for multi-step retrosynthetic planning that integrates global synthesizability knowledge into step-wise retrosynthetic prediction. GuideRetro learns transferable knowledge from large-scale reaction networks by modeling the evolution of synthetic complexity along reaction pathways. 
-During planning, a route-aware synthesis state modeling module combines the evolving retrosynthetic route with retrieved global signals to guide reactant generation at each step. 
-Experiments on benchmark datasets show that GuideRetro achieves state-of-the-art performance. The integration of global synthesizability knowledge and route-aware modeling improves planning accuracy and search efficiency under realistic retrosynthetic settings. 
-## 🛠️ Requirements
-All the required packages can be installed by running `pip install -r requirements.txt`.
-## 📂 Data Preparation 
-### 1. Download Steps
+# GuideRetro: Toward Synthesizability-Aware Multi-Step Retrosynthetic Planning
 
-1.  **RetroBench & Zinc Stock**: Download **[RetroBench and zinc_stock_17_04_20.hdf5](https://github.com/SongtaoLiu0823/FusionRetro)** and place the files into `Data/`.
-2.  **Retro Building Blocks & Models**: Download **[Retro_plan data](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0)**. Unzip it and move the `Data/` and `retro_star/one_step_model/` folders to the project root directory (merge with existing folders).
-3.  **USPTO-Full**: Download **[USPTO-Full](https://github.com/Hanjun-Dai/GLN)** and place the files into `Data/Train/for embedding/`.
 
-### 2. Directory Structur
-Organize the data structure as follows:
+## Requirements
+
+All required packages can be installed by running:
+
+```bash
+pip install -r requirements.txt
+```
+
+Key dependencies: PyTorch 1.13.1+cu117, DGL 0.9.1+cu117, RDKit, FAISS-GPU, einops, scikit-learn.
+
+## Data Preparation
+
+### 1. Download Data
+
+1. **RetroBench & Zinc Stock**: Download from [FusionRetro](https://github.com/SongtaoLiu0823/FusionRetro) and place `zinc_stock_17_04_20.hdf5` plus the RetroBench dataset files into `Data/`.
+2. **Retro Building Blocks & Models**: Download [retro_data.zip](https://www.dropbox.com/scl/fi/cchn0wjz8j0dqxhr0qrom/retro_data.zip?rlkey=kqz60ec7vx7087vg1o63nucyo&e=1&dl=0). Unzip it and merge the `Data/` and `retro_star/one_step_model/` folders into the project root.
+3. **USPTO-Full**: Download from [GLN](https://github.com/Hanjun-Dai/GLN) and place the files into `Data/Train/for_embedding/`.
+
+### 2. Directory Structure
+
+Organize the data as follows:
+
 ```text
 Data/
-├──Test/
-│   ├──chembl_1000.pkl
-│   └──gdb17_1000.pkl
-│   └──retro*_190.pkl
-│   └──test_dataset.json
+├── Test/
+│   ├── chembl_1000.pkl
+│   ├── gdb17_1000.pkl
+│   ├── retro*_190.pkl
+│   └── test_dataset.json
 ├── Train/
-│   ├── for embedding
-│       └──raw_test.csv
-│       └──raw_train.csv
-│       └──raw_val.csv
-│   └── for model
-│       └──train_canolize_dataset.json
-│       └──valid_canolize_dataset.json
+│   ├── for_embedding/
+│   │   ├── raw_test.csv
+│   │   ├── raw_train.csv
+│   │   └── raw_val.csv
+│   └── for_model/
+│       ├── train_canolize_dataset.json
+│       └── valid_canolize_dataset.json
 ├── zinc_stock_17_04_20.hdf5
-├── origin_dict.csv
+└── origin_dict.csv
 ```
-### 3. Data preprocessing
-```text
-# Canolize RetroBench (eg. train_dataset.json --> train_canolize_dataset.json)
-python Dataprocess/to_canolize.py --dataset train  
+
+### 3. Data Preprocessing
+
+```bash
+# Canonicalize RetroBench (train_dataset.json → train_canolize_dataset.json)
+python Dataprocess/to_canolize.py --dataset train
 python Dataprocess/to_canolize.py --dataset valid
- 
-# Get training data and ensure that it does not contain test molecules
+
+# Clean training data — ensure no test molecules leak into training set
 python Dataprocess/get_clear_emb_node.py
 python Dataprocess/get_clear_train_data.py
+```
+
+## Project Structure
 
 ```
-## 🚀 Usage (运行)
-To strictly adhere to the double-blind review policy and avoid potential identity leakage via file metadata, pre-trained checkpoints are not included in this anonymous submission.
-We provide training scripts and configuration files to ensure reproducibility from scratch. The checkpoints will be released immediately upon acceptance.
-### 1. Training
-```text
-python model_train.py --batch_size 32 --epochs 300
+GuideRetro/
+├── RGCN.py                        # RGCN training with BPR loss for molecular embeddings
+├── modeling.py                    # Transformer encoder/decoder with gated fusion module
+├── model_train.py                 # Single-step Transformer fine-tuning
+├── preprocess.py                  # SMILES tokenization, vocab, feature extraction
+├── Similar_search.py              # FAISS molecular similarity search (Morgan FP + Tanimoto)
+├── retro_seach.py                 # A* multi-step retrosynthesis search
+├── greedy_dfs.py                  # Greedy DFS multi-step retrosynthesis search
+├── Dataprocess/                   # Data cleaning & canonicalization scripts
+│   ├── to_canolize.py             # SMILES canonicalization via InChI round-trip
+│   ├── get_clear_train_data.py    # Remove test-overlapping molecules from training
+│   ├── get_clear_emb_node.py      # Clean embedding nodes
+│   └── get_reaction_score.py      # Compute reaction scores
+├── retro_star/                    # Retro* planner integration
+│   ├── alg/                       # MolTree, MolNode, MolStar search algorithms
+│   ├── common/                    # Shared utilities (args, fingerprints, prepare)
+│   ├── model/                     # Value MLP for heuristic scoring
+│   ├── retro_plan_w_guidereto.py  # Retro* planner using GuideRetro one-step model
+│   └── packages/                  # rdchiral & mlp_retrosyn (template-based baseline)
+├── one_step_model/                # Template-based one-step model checkpoints
+├── ckpts/                         # Pretrained TransE KG embeddings
+├── rgcn/                          # RGCN training outputs (embeddings, logs)
+└── models/                        # Trained Transformer checkpoints
 ```
-### 2. Evaluation 
-```text
-** For Exact Match Results **
-# Greedy dfs
+
+## Training
+
+The training pipeline has three stages:
+
+### Stage 1: Train RGCN Molecular Embeddings
+
+Trains a Relational Graph Convolutional Network with BPR (Bayesian Personalized Ranking) loss on the reaction knowledge graph.
+
+```bash
+python RGCN.py \
+    --hid_size 512 \
+    --batch_size 3000 \
+    --num_epochs 200 \
+    --score_file Data/Train/for_embedding/clean_reactions_scscore.txt
+```
+
+**Outputs:** `rgcn/global_emb_FP_512/embedding.npy` (shape: `num_molecules × 512`)
+
+### Stage 2: Train Single-Step Transformer
+
+Trains the encoder-decoder Transformer with feature fusion to predict reactants from products.
+
+```bash
+python model_train.py \
+    --pretrained_path models/model.pkl \
+    --finetune_lr 1e-4 \
+    --epochs 300 \
+    --batch_size 32 \
+    --label_smoothing 0 \
+    --max_grad_norm 0
+```
+
+**Outputs:** Best model saved to `models/` 
+
+## Evaluation
+
+Two evaluation modes are supported: **Exact Match**  and **Success Rate**.
+### Exact Match Results
+
+```bash
+# Greedy DFS
 python greedy_dfs.py --beam_size 5 --temperature 2.2
-# Retro* seach
-python retro_search.py --use_value --beam_size 5 ----temperature 2.2
-# Retro*-0 seach
-python retro_search.py --beam_size 5 --temperature 2.2
 
-** For Success Rate Results **
-# Retro* seach
-python retro_star/retro_plan.py --test_routes 'test dataset path' --use_value --temperature 1.5
-# Retro*-0 seach
-python retro_star/retro_plan.py --test_routes 'test dataset path' --temperature 1.5 
+# Retro* search (A* with value function)
+python retro_seach.py --use_value --beam_size 5 --temperature 2.2
+
+# Retro*-0 search (A* without value function)
+python retro_seach.py --beam_size 5 --temperature 2.2
 ```
 
+### Success Rate Results (Full Route Planning)
+
+```bash
+# Retro* search (with value function)
+python retro_star/retro_plan_w_guidereto.py \
+    --test_routes 'Data/Test/retro*_190.pkl' --use_value_fn --temperature 1.5
+
+# Retro*-0 search (without value function)
+python retro_star/retro_plan_w_guidereto.py \
+    --test_routes 'Data/Test/retro*_190.pkl' --temperature 1.5
+```
+
+
+## References
+
+If you use this code in your research, please cite the GuideRetro paper.
