@@ -75,8 +75,8 @@ GuideRetro/
 │   ├── common/                    # Shared utilities (args, fingerprints, prepare)
 │   ├── model/                     # Value MLP for heuristic scoring
 │   ├── retro_plan_w_guidereto.py  # Retro* planner using GuideRetro one-step model
-│   └── packages/                  # rdchiral & mlp_retrosyn (template-based baseline)
-├── one_step_model/                # Template-based one-step model checkpoints
+│   ├── packages/                  # rdchiral & mlp_retrosyn (template-based baseline)
+│   └──  one_step_model/                # Template-based one-step model checkpoints
 ├── ckpts/                         # Pretrained TransE KG embeddings
 ├── rgcn/                          # RGCN training outputs (embeddings, logs)
 └── models/                        # Trained Transformer checkpoints
