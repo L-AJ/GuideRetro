@@ -58,6 +58,7 @@ python Dataprocess/get_clear_train_data.py
 
 ```
 GuideRetro/
+├── pretrain_kg_embedding_FP.py    # TransE KG embedding pretraining 
 ├── RGCN.py                        # RGCN training with BPR loss for molecular embeddings
 ├── modeling.py                    # Transformer encoder/decoder with gated fusion module
 ├── model_train.py                 # Single-step Transformer fine-tuning
@@ -87,6 +88,34 @@ GuideRetro/
 The training pipeline has three stages:
 
 ### Stage 1: Train RGCN Molecular Embeddings
+
+```bash
+python Dataprocess/get_fp_packed.py
+```
+Trains a TransE (l2) knowledge graph embedding model with fingerprint-based initialization. This learns molecular representations from the reaction knowledge graph (head → relation → tail triples).
+
+```bash
+DGLBACKEND=pytorch python pretrain_kg_embedding_FP.py \
+    --model_name TransE_l2 \
+    --dataset Embedding \
+    --data_path Data/Train/for_embedding \
+    --data_files all_molecules_clean.txt relations.txt clean_reactions.txt \
+    --format udd_hrt \
+    --batch_size 2048 \
+    --neg_sample_size 128 \
+    --hidden_dim 512 \
+    --gamma 12.0 \
+    --lr 0.1 \
+    --max_step 500000 \
+    --log_interval 1000 \
+    --batch_size_eval 16 \
+    -adv \
+    --regularization_coef 1.00E-07 \
+    --gpu 0 \
+    --fp_path Data/Train/for_embedding/fingerprints_packed.npy
+```
+
+**Output:** Embeddings saved to `ckpts/TransE_l2_Embedding_*_*/`. The key file is `Embedding_TransE_l2_entity.npy`.
 
 Trains a Relational Graph Convolutional Network with BPR (Bayesian Personalized Ranking) loss on the reaction knowledge graph.
 
