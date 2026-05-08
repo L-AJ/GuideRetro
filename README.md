@@ -96,6 +96,7 @@ Compresses 2048-bit Morgan fingerprints into 256-byte packed arrays (8x space re
 **Output:** `Data/Train/for_embedding/fingerprints_packed.npy`
 
 ### Stage 1.2 — Pretrain TransE KG Embeddings
+> **DGL version:** This step requires `dgl==0.4.3` (it uses the legacy `dgl.contrib.sampling.EdgeSampler` API).
 
 ```bash
 DGLBACKEND=pytorch python pretrain_kg_embedding_FP.py \
@@ -123,7 +124,8 @@ Learns molecular representations from the reaction knowledge graph (head -> rela
 **Output:** `ckpts/TransE_l2_Embedding_*_*/Embedding_TransE_l2_entity.npy`
 
 ### Stage 1.3 — Train RGCN Embeddings
-
+> **DGL version:** This step uses `dgl==0.9.1+cu117` (the `dgl.nn.pytorch.RelGraphConv` and `dgl.dataloading.NeighborSampler` APIs).
+> 
 ```bash
 python RGCN.py \
     --hid_size 512 \
