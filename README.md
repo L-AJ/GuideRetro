@@ -85,7 +85,7 @@ GuideRetro/
 
 ## Training
 
-> **Checkpoints available:** model checkpoints are provided. Download `GuideRetro.7z` from [Google Drive]([https://drive.google](https://drive.google.com/file/d/1hcom5Ukbo_0G5BESrzVKKc9SX66bvZqv/view?usp=sharing), decompress, and place the contents under the project root to skip training.
+> **Checkpoints available:** model checkpoints are provided. Download `GuideRetro.7z` from [Google Drive]([https://drive.google](https://drive.google.com/file/d/1hcom5Ukbo_0G5BESrzVKKc9SX66bvZqv/view?usp=sharing]), decompress, and place the contents under the project root to skip training.
 
 The training pipeline has two stages:
 ### Stage 1.1 — Generate Packed Fingerprints
