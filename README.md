@@ -21,8 +21,6 @@ Key dependencies: PyTorch 1.13.1+cu117, DGL 0.9.1+cu117, RDKit, FAISS-GPU, einop
 
 ### 2. Directory Structure
 
-Organize the data as follows:
-
 ```text
 Data/
 ├── Test/
@@ -32,26 +30,56 @@ Data/
 │   └── test_dataset.json
 ├── Train/
 │   ├── for_embedding/
+│   │   ├── all_molecules_clean.txt    # entity_id <TAB> SMILES
+│   │   ├── relations.txt              # relation_id <TAB> relation_name
+│   │   ├── clean_reactions.txt        # head_id <TAB> rel_id <TAB> tail_id
+│   │   ├── clean_reactions_scscore.txt
 │   │   ├── raw_test.csv
 │   │   ├── raw_train.csv
 │   │   └── raw_val.csv
 │   └── for_model/
 │       ├── train_canolize_dataset.json
-│       └── valid_canolize_dataset.json
+│       ├── valid_canolize_dataset.json
+│       └── clean_train_FINAL.json
 ├── zinc_stock_17_04_20.hdf5
 └── origin_dict.csv
 ```
 
 ### 3. Data Preprocessing
 
-```bash
-# Canonicalize RetroBench (train_dataset.json → train_canolize_dataset.json)
-python Dataprocess/to_canolize.py --dataset train
-python Dataprocess/to_canolize.py --dataset valid
+Run in order. Each step's output feeds the next.
 
-# Clean training data — ensure no test molecules leak into training set
+**Step 1 — Canonicalize reaction data**
+
+```bash
+python Dataprocess/to_canolize.py --dataset train   # → train_canolize_dataset.json (CWD)
+python Dataprocess/to_canolize.py --dataset valid   # → valid_canolize_dataset.json (CWD)
+```
+
+Move the output files to `Data/Train/for_model/` after running.
+
+**Step 2 — Clean embedding data (remove test set contamination)**
+
+```bash
 python Dataprocess/get_clear_emb_node.py
+```
+
+| Output file | Location |
+|-------------|----------|
+| `all_molecules_clean.txt` | `Data/Train/for_embedding/` |
+| `clean_reactions.txt` | `Data/Train/for_embedding/` |
+| `final_test_smiles.txt` | CWD (project root) |
+
+**Step 3 — Clean RetroBench training JSON (zero test-molecule leakage)**
+
+```bash
 python Dataprocess/get_clear_train_data.py
+```
+
+| Input | Output |
+|-------|--------|
+| `Data/Train/for_model/train_canolize_dataset.json` | `Data/Train/for_model/clean_train_FINAL.json` |
+| `final_test_smiles.txt` (from Step 2) | |
 ```
 
 ## Project Structure
