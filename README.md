@@ -1,6 +1,6 @@
-![Demo](fig1.png)
-# GuideRetro: Toward Synthesizability-Aware Multi-Step Retrosynthetic Planning
 
+# GuideRetro: Toward Synthesizability-Aware Multi-Step Retrosynthetic Planning
+![Demo](fig1.png)
 
 ## Requirements
 
