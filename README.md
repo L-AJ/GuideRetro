@@ -84,7 +84,7 @@ python Dataprocess/get_clear_train_data.py
 
 ## Project Structure
 
-```
+```bash
 GuideRetro/
 ├── pretrain_kg_embedding_FP.py    # TransE KG embedding pretraining 
 ├── RGCN.py                        # RGCN training with BPR loss for molecular embeddings
