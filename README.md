@@ -1,3 +1,4 @@
+![Demo](fig1.png)
 # GuideRetro: Toward Synthesizability-Aware Multi-Step Retrosynthetic Planning
 
 
